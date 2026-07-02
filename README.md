@@ -26,14 +26,53 @@ platform.
 | `kotoba.render.logo` | `logo.rs` | Boot-logo SVG + brand colors + splash-screen fade/progress timing state machine |
 | `kotoba.render.raytrace` | `raytrace.rs` | `RtGlobals` uniform constructor (the CPU-side data the RT compute pass uploads) |
 | `kotoba.render.bits` | (new) | Shared byte/IEEE754 helpers (`f32-le`, `half->f32`, `i24-le`, `i32-bits->f32`, ...) used across the loaders/decoders above |
+| `kotoba.render.uastc` + `kotoba.render.basisu` | `basisu.rs` + `uastc_tables.rs` + `uastc_vectors.rs` | The **UASTC (Universal ASTC) LDR 4×4 block decoder** — a faithful `unpack_uastc` port (Huffman mode table, subset/partition patterns, dual-plane, trit/quint BISE endpoint decode, ASTC endpoint unquantization + weight interpolation) — plus KTX2 container parsing (`KHR_texture_basisu`, UASTC-only; ETC1S reported unsupported). Lookup tables machine-extracted verbatim from the Rust source. Validated bit-exact against the Rust source's own reference-encoder vectors (`uastc_vectors.rs`) — **see the UASTC mode-coverage note below** |
 
-`clojure -M:test` — **61 tests, 637 assertions, 0 failures.** Several suites
-(`meshopt_test`, `splat_loader_test`) reuse the *exact byte fixtures* the Rust
-source says were produced by the real reference encoders (`zeux/meshoptimizer`
-C++, Niantic SPZ), so passing them is a genuine bit-exact-port proof, not just
-"code runs."
+`clojure -M:test` — **66 tests, 1068 assertions, 0 failures.** Several suites
+(`meshopt_test`, `splat_loader_test`, `uastc_test`) reuse the *exact byte
+fixtures* the Rust source says were produced by the real reference encoders
+(`zeux/meshoptimizer` C++, Niantic SPZ, basis_universal), so passing them is a
+genuine bit-exact-port proof, not just "code runs."
+
+### UASTC mode coverage (be precise — a wrong texture decoder is worse than none)
+
+The decoder is a line-by-line port of `basisu.rs`'s `decode_uastc_block`
+(itself a port of basis_universal's `unpack_uastc`) and *implements all 19
+UASTC LDR block modes* — the mode dispatch, every subset/partition table
+(`PATTERNS2`/`PATTERNS3`/`PATTERNS2_BC7M3`), dual-plane, luminance+alpha, and
+the full trit/quint BISE endpoint decode are all present, driven by lookup
+tables extracted verbatim (byte-for-byte, machine-parsed) from
+`uastc_tables.rs`.
+
+**Fixture-verified bit-exact (7 modes):** the `uastc_vectors.rs` reference set
+(120 real encoder→`unpack_uastc` block pairs) covers modes **0, 4, 6, 8, 9,
+11, 15**, and this port reproduces all 120 byte-for-byte. Crucially, those 7
+modes already exercise the hardest, most error-prone shared machinery end to
+end: **trit** endpoint BISE (modes 0, 11), **quint** endpoint BISE (modes 4,
+6), **dual-plane** decode (modes 6, 11), **2-subset** partitioning (modes 4,
+9), **luminance+alpha** endpoints (mode 15), and solid-color (mode 8).
+
+**Implemented but not fixture-verified (12 modes):** 1, 2, 3, 5, 7, 10, 12,
+13, 14, 16, 17, 18. No reference vectors exist for these in the Rust source, so
+they are only validated by construction (faithful translation reusing the
+same verified code paths + verified tables), not by golden bytes. Most reuse
+paths already covered above; the genuinely *unexercised-by-fixture* pieces are
+narrow and specific: the **3-subset** anchor path + `PATTERNS3` table (mode
+3), the `PATTERNS2_BC7M3` partition table (mode 7), the 5-bit weight table
+`WEIGHT_TABLES[5]` (mode 18), and the LA-plus-dual-plane / 2-subset-LA combos
+(modes 16, 17). These are table-selection differences fed through
+fixture-verified decode logic, but they have **not** been proven byte-exact
+against a reference encoder here — treat modes outside {0,4,6,8,9,11,15} as
+high-confidence-but-unverified until golden vectors for them are added.
 
 ## What's adapter-only (left unported, and why)
+
+(UASTC/KTX2 note: the UASTC block decoder + KTX2 container parsing are now
+**ported** — see above. Matching the Rust source's own scope, **ETC1S/BasisLZ**
+supercompressed KTX2 and **Zstandard** level supercompression are deliberately
+*not* decoded — they are detected and reported unsupported, exactly as
+`basisu.rs` did; `ZLIB` level supercompression is supported on the JVM only,
+like this repo's SPZ gzip.)
 
 This is GPU/rendering code — per ADR-2607010930's own established pattern
 ("hot loop stays native/WGSL; CLJ authors + dispatches"), the actual wgpu
@@ -69,17 +108,6 @@ host-adapter, not domain logic to port:
   genuinely pure CPU logic *inside* that function (dequantization scaling,
   GLB container framing, base64 decode, normal generation) IS ported to
   `kotoba.render.gltf`.
-- **`basisu.rs` + `uastc_tables.rs` + `uastc_vectors.rs`** (1138 lines) — the
-  UASTC LDR block decoder (Huffman mode table + ASTC endpoint/weight
-  interpolation, `unpack_uastc` port) and KTX2 container parsing. This is
-  pure CPU code with **no** GPU dependency and, like `meshopt.rs`, ships its
-  own bit-exact reference vectors (`uastc_vectors.rs`) — genuinely portable
-  and a good target for a **follow-up port**. It was left out of this pass
-  because a correct UASTC decoder needs all ~19 block modes ported together
-  (a partial decoder can't correctly decode real KTX2 assets — wrong output
-  is worse than no decoder) and the reference-vector coverage needs
-  auditing mode-by-mode before trusting a translation; that's a
-  proportionally large, separate effort from the rest of this crate.
 - **`decode_meshopt_glb`** (`meshopt.rs`) — the GLB-container/glTF-JSON
   orchestration that locates `EXT_meshopt_compression` buffer views and
   rewrites the JSON. This is plumbing *around* the codec (would need a JSON
@@ -97,7 +125,7 @@ host-adapter, not domain logic to port:
 ## Develop
 
 ```bash
-clojure -M:test    # 61 tests, 637 assertions, 0 failures
+clojure -M:test    # 66 tests, 1068 assertions, 0 failures
 clojure -M:lint     # clj-kondo, 0 errors/warnings
 ```
 
