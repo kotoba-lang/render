@@ -1,0 +1,10 @@
+;; schema.edn — Datomic/Datascript 互換スキーマ定義（自動生成 by edn-datomize.bb）
+;; :db/ident 属性定義のリスト。Datomic 固有キー(:db.install/_attribute 等)は使わない。
+;; 手編集禁止 — 再生成すると上書きされる。
+
+[{:db/ident :kotoba.render.pipeline-specs/blend, :db/valueType :db.type/keyword, :db/cardinality :db.cardinality/one}
+ {:db/ident :kotoba.render.pipeline-specs/cull, :db/valueType :db.type/keyword, :db/cardinality :db.cardinality/one}
+ {:db/ident :kotoba.render.pipeline-specs/depth-compare, :db/valueType :db.type/string, :db/cardinality :db.cardinality/one}
+ {:db/ident :kotoba.render.pipeline-specs/depth-write, :db/valueType :db.type/boolean, :db/cardinality :db.cardinality/one}
+ {:db/ident :kotoba.render.pipeline-specs/name, :db/valueType :db.type/string, :db/cardinality :db.cardinality/one}
+ {:db/ident :kotoba.render.pipeline-specs/shader, :db/valueType :db.type/string, :db/cardinality :db.cardinality/one}]
