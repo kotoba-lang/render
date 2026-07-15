@@ -1,5 +1,6 @@
 (ns kotoba.render.terrain-biome-test
   (:require [clojure.test :refer [deftest is]]
+            [kotoba.render.terrain :as terrain]
             [kotoba.render.terrain-biome :as biome]))
 
 (deftest weights-are-normalized-and-art-directed
@@ -27,3 +28,10 @@
                                          :normal-strength :uv-scale]) (:layers contract)))
     (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                  (biome/webgpu-contract (assoc biome/default-biome :layers []))))))
+
+(deftest terrain-mesh-carries-normalized-gpu-weight-attribute
+  (let [mesh (terrain/terrain-mesh {:base-segments 8 :amplitude 5 :seed 17} :high)
+        weights (biome/mesh-weights mesh)]
+    (is (= (quot (count (first mesh)) 3) (count weights)))
+    (is (every? #(= 3 (count %)) weights))
+    (is (every? #(< (Math/abs (- 1.0 (reduce + %))) 1.0e-9) weights))))

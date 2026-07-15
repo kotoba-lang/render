@@ -59,6 +59,16 @@
       :roughness (blend :roughness) :metallic (blend :metallic)
       :normal-strength (blend :normal-strength)})))
 
+(defn mesh-weights
+  "Bake grass/soil/rock weights in vertex order for a terrain mesh tuple.
+   This is the portable geometry attribute consumed at shader location 11."
+  ([mesh] (mesh-weights default-biome mesh))
+  ([biome [positions normals _uvs _indices]]
+   (mapv (fn [[[x y z] normal]]
+           (let [{:keys [grass soil rock]} (biome-weights biome y normal x z)]
+             [grass soil rock]))
+         (map vector (partition 3 positions) (partition 3 normals)))))
+
 (defn webgpu-contract
   "Validated data-only contract consumable by WebGPU and WGSL adapters."
   ([] (webgpu-contract default-biome))
