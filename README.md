@@ -227,3 +227,8 @@ shares junction rows, keeps distance-based UVs continuous, and limits sharp-corn
 miters. `road-mesh-parts` exposes separate `:surface` and `:shoulder` meshes with
 byte-equal shared boundaries so executors can bind distinct PBR materials without
 reintroducing seams. `webgpu-registration` emits high/medium/low keys per part.
+
+The `:marking` material part is generated from the same centerline, cumulative
+distance and height sampler. Its deterministic `:dash-length`, `:gap-length`,
+`:phase`, `:offsets`, `:clearance` and per-LOD `:budget` contract keeps paint on
+sloped terrain without bridging dash gaps or sharing the asphalt material.
