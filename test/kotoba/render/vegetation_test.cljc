@@ -62,7 +62,15 @@
     (is (= {:min [-2.5 0.0 -2.5] :max [2.5 9.0 2.5]} (vegetation/bounds spec)))
     (is (= #{:park-tree-high :park-tree-low} (set (keys registry))))
     (is (every? #(= :mesh (:type %)) (vals registry)))
-    (is (every? #(seq (get-in % [:mesh :positions])) (vals registry)))))
+    (is (every? #(seq (get-in % [:mesh :positions])) (vals registry)))
+    (doseq [{registered :mesh} (vals registry)
+            :let [{:keys [positions normals uvs indices]} registered
+                  flat-pos (vec (mapcat identity positions))
+                  flat-normal (vec (mapcat identity normals))
+                  flat-uv (vec (mapcat identity uvs))]]
+      (is (= (count positions) (count uvs)))
+      (is (= (* 4 (count positions))
+             (count (mesh/compute-tangents flat-pos flat-normal flat-uv indices)))))))
 
 (deftest rejects-invalid-specs
   (doseq [[spec detail] [[(assoc (first specs) :variant :palm) :high]

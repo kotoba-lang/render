@@ -54,7 +54,15 @@
     (is (= (:vertex-count loaded) (quot (count positions) 3)))
     (is (= (* 4 (:vertex-count loaded)) (count tangents)))
     (is (= #{:island-high :island-medium :island-low} (set (keys registry))))
-    (is (every? #(= :mesh (:type %)) (vals registry)))))
+    (is (every? #(= :mesh (:type %)) (vals registry)))
+    (doseq [{registered :mesh} (vals registry)
+            :let [{:keys [positions normals uvs indices]} registered
+                  flat-pos (vec (mapcat identity positions))
+                  flat-normal (vec (mapcat identity normals))
+                  flat-uv (vec (mapcat identity uvs))]]
+      (is (= (count positions) (count uvs)))
+      (is (= (* 4 (count positions))
+             (count (mesh/compute-tangents flat-pos flat-normal flat-uv indices)))))))
 
 (deftest rejects-invalid-terrain-contract
   (doseq [[spec detail] [[(assoc base :patch [0.5 0]) :high]

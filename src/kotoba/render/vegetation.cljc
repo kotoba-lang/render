@@ -172,10 +172,11 @@
   [registration-id spec]
   (into {}
         (for [{detail :id :keys [mesh bounds triangle-count]} (vegetation-lods spec)
-              :let [[positions normals _uvs indices] mesh
+              :let [[positions normals uvs indices] mesh
                     key (keyword (str (name registration-id) "-" (name detail)))]]
           [key {:type :mesh
                 :mesh {:positions (mapv vec (partition 3 positions))
                        :normals (mapv vec (partition 3 normals))
+                       :uvs (mapv vec (partition 2 uvs))
                        :indices indices}
                 :bounds bounds :triangle-count triangle-count}])))
