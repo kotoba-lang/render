@@ -5,6 +5,16 @@
   (:require [clojure.test :refer [deftest is]]
             [kotoba.render.texture :as tex]))
 
+(deftest portable-pbr-texture-contract
+  (let [set (tex/pbr-texture-set
+             {:albedo (tex/rgba8 1 1 [240 120 60 255] :srgb)})]
+    (is (= :kotoba.render/texture-rgba8-v1 (get-in set [:albedo :schema])))
+    (is (= tex/normal-pixel (get-in set [:normal :data])))
+    (is (= tex/mr-pixel (get-in set [:metallic-roughness :data])))
+    (is (= :linear (get-in set [:metallic-roughness :color-space]))))
+  (is (thrown? #?(:clj Exception :cljs js/Error)
+               (tex/rgba8 2 2 [0 0 0 0] :linear))))
+
 (deftest mip-level-calculation
   (is (= (tex/mip-level-count 1024 1024) 11))
   (is (= (tex/mip-level-count 4 4) 3))

@@ -58,3 +58,34 @@
   "1x1 default metallic-roughness (metallic=0, roughness=0.5).
    glTF convention: G=roughness, B=metallic."
   [0 128 0 255])
+
+(defn rgba8
+  "Portable RGBA8 texture descriptor consumed by WebGPU/native host adapters.
+   `data` is row-major unorm bytes. `color-space` is :srgb for base color and
+   :linear for normal/metallic-roughness data textures."
+  [width height data color-space]
+  (when-not (and (pos-int? width) (pos-int? height))
+    (throw (ex-info "texture dimensions must be positive integers"
+                    {:width width :height height})))
+  (when-not (= (* width height 4) (count data))
+    (throw (ex-info "RGBA8 byte count does not match dimensions"
+                    {:width width :height height :expected (* width height 4)
+                     :actual (count data)})))
+  (when-not (#{:srgb :linear} color-space)
+    (throw (ex-info "texture color-space must be :srgb or :linear"
+                    {:color-space color-space})))
+  {:schema :kotoba.render/texture-rgba8-v1
+   :width width :height height :data (vec data) :color-space color-space})
+
+(def fallback-textures
+  "Spec-correct 1x1 PBR bindings. Hosts bind these even when an asset omits a
+   texture, so shader layouts never branch or claim an unavailable resource."
+  {:albedo (rgba8 1 1 white-pixel :srgb)
+   :normal (rgba8 1 1 normal-pixel :linear)
+   :metallic-roughness (rgba8 1 1 mr-pixel :linear)})
+
+(defn pbr-texture-set
+  "Complete a partial {:albedo :normal :metallic-roughness} texture set with
+   portable fallbacks. Unknown keys are retained for forward-compatible hosts."
+  [textures]
+  (merge fallback-textures (or textures {})))
