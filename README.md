@@ -1,5 +1,14 @@
 # kotoba-lang/render
 
+## Deterministic procedural materials
+
+`kotoba.render.procedural/bake-pbr-material` builds complete steel, masonry and
+ground PBR texture sets from integer dimensions, scale and seed. The pure CLJC
+baker uses a specified coordinate hash rather than global randomness, and emits
+the existing `:kotoba.render/texture-rgba8-v1` descriptors consumed by browser
+and native adapters. Bake these descriptors into release assets; runtime hosts
+remain responsible only for upload and mip handling.
+
 Zero-dep-ish (JVM-resource-loading only) portable `.cljc` — restored from the
 legacy `kami-engine/kami-render` Rust crate as part of the **clj-wgsl
 migration** (ADR-2607010930, `com-junkawasaki/root`, Phase 4/5).
