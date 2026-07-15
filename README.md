@@ -27,6 +27,7 @@ platform.
 | `kotoba.render.raytrace` | `raytrace.rs` | `RtGlobals` uniform constructor (the CPU-side data the RT compute pass uploads) |
 | `kotoba.render.bits` | (new) | Shared byte/IEEE754 helpers (`f32-le`, `half->f32`, `i24-le`, `i32-bits->f32`, ...) used across the loaders/decoders above |
 | `kotoba.render.material` | shared contract | Validated metallic/roughness PBR material data and fixed-shape GPU uniform packing |
+| `kotoba.render.environment-bake` | offline tool | Deterministic irradiance convolution, GGX specular prefilter and split-sum BRDF LUT bake to gzip EDN |
 | `kotoba.render.shadow` | shared contract | Cascaded directional-shadow split, atlas, bias, and pass planning |
 | `kotoba.render.post-process` | shared contract | HDR frame graphs: SSAO/SSR/bloom/DoF/motion blur/tone mapping/AA/color grading |
 | `kotoba.render.lod` | shared contract | Screen-space LOD with hysteresis and deterministic density budgets |
@@ -129,8 +130,36 @@ host-adapter, not domain logic to port:
 
 ## Develop
 
+### Offline production IBL bake
+
+The runtime environment contract intentionally contains already-convolved
+bytes. Generate a production-sized analytic studio environment offline rather
+than checking thousands of handwritten integers into a scene:
+
 ```bash
-clojure -M:test    # 66 tests, 1068 assertions, 0 failures
+clojure -M:ibl-bake --out target/ibl/studio-pbr-environment.edn.gz
+```
+
+The deterministic defaults produce a 32px diffuse irradiance cube, a 128px
+GGX-prefiltered specular cube with its complete 128→1 roughness mip chain, and
+a 128×128 split-sum BRDF LUT. The gzip EDN expands directly to the existing
+`:kotoba.render/pbr-environment-v1` map and is validated again by
+`kotoba.render.environment-bake/read-baked`.
+
+Applications should publish the generated artifact and reference its URL from
+scene data. A build adapter can call `read-baked`; a browser adapter can fetch,
+decompress and EDN-read it before renderer initialization. In both cases the
+decoded value is passed through the existing `:environment` option—there is no
+new runtime render contract and no convolution on the render thread.
+
+For a custom offline profile, call
+`kotoba.render.environment-bake/bake-environment` with the same keys as
+`production-config`, then `write-baked!`. Fixed Hammersley samples and an
+analytic seam-free source make identical configuration produce identical
+bytes across runs.
+
+```bash
+clojure -M:test     # full portable + bake suite
 clojure -M:lint     # clj-kondo, 0 errors/warnings
 ```
 
