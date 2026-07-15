@@ -192,6 +192,16 @@ clojure -M:test     # full portable + bake suite
 clojure -M:lint     # clj-kondo, 0 errors/warnings
 ```
 
+## Portable combat-character silhouettes
+
+`kotoba.render.character` generates grounded high/low combat operators from
+head, torso, pelvis, limb, shoulder and weapon primitives. Its WebGPU registry
+uses the generic portable `:mesh` contract and retains normalized bounds plus
+stable joint and weapon/back socket metadata under
+`:kotoba.render/character-rig-v1`. The current mesh is static; adapters can use
+that metadata for a future segmented or skinned animation path without changing
+scene geometry keys.
+
 ## License
 
 Apache License 2.0.
