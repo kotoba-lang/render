@@ -1,5 +1,18 @@
 # kotoba-lang/render
 
+## Heightfield terrain patches
+
+`kotoba.render.terrain` bakes deterministic heightfield patches with high,
+medium and low canonical-grid LODs, analytic normals, continuous UVs, explicit
+bounds and crack-hiding skirts. `webgpu-registration` emits portable `:mesh`
+entries for the shared WebGPU/WebGL geometry registry.
+
+```clojure
+(terrain/webgpu-registration
+ :island {:patch [0 0] :size 64 :base-segments 32
+          :amplitude 9 :seed 2654435769 :skirt-depth 3})
+```
+
 ## Procedural vegetation
 
 `kotoba.render.vegetation` provides deterministic broadleaf, conifer and shrub
