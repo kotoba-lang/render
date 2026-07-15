@@ -1,6 +1,7 @@
 (ns kotoba.render.terrain
   "Deterministic heightfield patches with seam-stable LODs and skirts."
-  (:require [kotoba.render.procedural :as procedural]))
+  (:require [kotoba.render.procedural :as procedural]
+            [kotoba.render.terrain-biome :as terrain-biome]))
 
 (def details [:high :medium :low])
 (def detail-divisor {:high 1 :medium 2 :low 4})
@@ -121,13 +122,19 @@
         [[:high 128.0] [:medium 48.0] [:low 0.0]]))
 
 (defn webgpu-registration [registration-id spec]
-  (into {}
-        (for [{detail :id :keys [mesh bounds triangle-count]} (terrain-lods spec)
-              :let [[positions normals uvs indices] mesh
-                    key (keyword (str (name registration-id) "-" (name detail)))]]
-          [key {:type :mesh
-                :mesh {:positions (mapv vec (partition 3 positions))
-                       :normals (mapv vec (partition 3 normals))
-                       :uvs (mapv vec (partition 2 uvs))
-                       :indices indices}
-                :bounds bounds :triangle-count triangle-count}])))
+  (let [biome (or (:biome spec) terrain-biome/default-biome)
+        layer-indices (terrain-biome/layer-indices biome)]
+    (into {}
+          (for [{detail :id :keys [mesh bounds triangle-count]} (terrain-lods spec)
+                :let [[positions normals uvs indices] mesh
+                      biome-weights (terrain-biome/mesh-weights biome mesh)
+                      vertex-count (count biome-weights)
+                      key (keyword (str (name registration-id) "-" (name detail)))]]
+            [key {:type :mesh
+                  :mesh {:positions (mapv vec (partition 3 positions))
+                         :normals (mapv vec (partition 3 normals))
+                         :uvs (mapv vec (partition 2 uvs))
+                         :biome-weights biome-weights
+                         :biome-layer-indices (vec (repeat vertex-count layer-indices))
+                         :indices indices}
+                  :bounds bounds :triangle-count triangle-count}]))))
