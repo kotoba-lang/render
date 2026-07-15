@@ -64,3 +64,17 @@
                       {:expected expected :actual (count spec-levels)}))))
   (assoc (select-keys environment [:irradiance :prefiltered-specular :brdf-lut])
          :schema :kotoba.render/pbr-environment-v1))
+
+(defn- solid-faces [pixel]
+  (into {} (for [face cube-faces] [face (vec pixel)])))
+
+(def neutral-pbr-environment
+  "Valid 1x1 split-sum resources used only when a scene omits authored IBL.
+   Hosts always bind these, keeping the shader layout stable. The BRDF value is
+   a conservative neutral scale/bias approximation, not an offline-quality bake."
+  (pbr-environment
+   {:irradiance (cube-rgba8
+                 [(cube-level 1 (solid-faces [96 104 120 255]))] :linear)
+    :prefiltered-specular (cube-rgba8
+                           [(cube-level 1 (solid-faces [80 88 104 255]))] :linear)
+    :brdf-lut (texture/rgba8 1 1 [160 24 0 255] :linear)}))
