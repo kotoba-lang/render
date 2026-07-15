@@ -4,6 +4,9 @@
 
 (def details [:high :medium :low])
 (def detail-divisor {:high 1 :medium 2 :low 4})
+(def default-marking {:width 0.16 :dash-length 3.0 :gap-length 3.0
+                      :phase 0.0 :offsets [0.0] :clearance 0.015
+                      :budget {:high 256 :medium 128 :low 64}})
 
 (defn- sqrt [x] (#?(:clj Math/sqrt :cljs js/Math.sqrt) x))
 (defn- floor [x] (#?(:clj Math/floor :cljs js/Math.floor) x))
@@ -181,6 +184,95 @@
               [(into ps p) (into ns n) (into us u) (into is (map #(+ vertex-offset %) i))]))
           [[] [] [] []] meshes))
 
+(defn- interpolate [[ax az] [bx bz] t]
+  [(+ ax (* (- bx ax) t)) (+ az (* (- bz az) t))])
+
+(defn- point-at-distance [centers distances target]
+  (let [last-index (dec (count distances))
+        i (or (first (keep-indexed (fn [i d]
+                                     (when (and (pos? i) (<= target d)) i))
+                                   distances))
+              last-index)
+        d0 (nth distances (dec i)) d1 (nth distances i)
+        t (if (= d0 d1) 0.0 (/ (- target d0) (- d1 d0)))]
+    (interpolate (nth centers (dec i)) (nth centers i) t)))
+
+(defn- dash-intervals [total {:keys [dash-length gap-length phase budget]} detail]
+  (let [period (+ dash-length gap-length)
+        first-start (mod phase period)
+        max-dashes (get budget detail)]
+    (vec (take max-dashes
+               (for [start (range first-start total period)
+                     :let [end (min total (+ start dash-length))]
+                     :when (< start end)]
+                 [start end])))))
+
+(defn- interval-samples [centers distances [start end]]
+  (vec (concat [[start (point-at-distance centers distances start)]]
+               (for [[d point] (map vector distances centers)
+                     :when (< start d end)]
+                 [d point])
+               [[end (point-at-distance centers distances end)]])))
+
+(defn- marking-strip
+  [terrain road-clearance camber half-road-width
+   {:keys [width clearance uv-scale offset]} samples]
+  (let [points (mapv second samples)
+        rows (mapv (fn [i [_ [cx cz]]]
+                     (let [[lx lz scale] (lateral-frame points i 1.5)
+                           crown (* camber (max 0.0 (- 1.0 (/ (#?(:clj Math/abs :cljs js/Math.abs) offset)
+                                                               half-road-width))))]
+                       (mapv (fn [side]
+                               (let [lateral (+ offset (* side width 0.5 scale))
+                                     x (+ cx (* lx lateral)) z (+ cz (* lz lateral))]
+                                 [x (+ (terrain-height terrain x z) road-clearance crown clearance) z]))
+                             [-1.0 1.0])))
+                   (range) samples)
+        positions (vec (mapcat identity (mapcat identity rows)))
+        distances (mapv first samples)
+        uvs (vec (mapcat (fn [d] [0.0 (/ d uv-scale) 1.0 (/ d uv-scale)]) distances))
+        ;; Geometry follows the sampled heightfield; upward normals keep the paint
+        ;; material stable while avoiding a second independent terrain derivative.
+        normals (vec (mapcat (fn [_] [0.0 1.0 0.0 0.0 1.0 0.0]) rows))
+        indices (vec (mapcat (fn [row]
+                               (let [a (* row 2) b (inc a) c (+ a 2) d (inc c)]
+                                 [a c b b c d]))
+                             (range (dec (count rows)))))]
+    [positions normals uvs indices]))
+
+(defn marking-mesh
+  "Bake deterministic dashed lane markings from the road's exact centerline,
+   cumulative distance and terrain sampler. Dash endpoints are interpolated at
+   exact world distances; interior rows retain terrain-following subdivisions."
+  ([spec] (marking-mesh spec :high))
+  ([spec detail]
+   (let [spec (merge {:width 8.0 :shoulder 1.5 :camber 0.12 :shoulder-drop 0.08
+                      :clearance 0.03 :uv-scale 8.0 :base-subdivisions 8
+                      :miter-limit 2.0 :marking default-marking} spec)
+         _ (validate! spec detail)
+         marking (merge default-marking (:marking spec))
+         {:keys [width dash-length gap-length phase offsets clearance budget]} marking
+         _ (when-not (and (number? width) (pos? width)
+                          (number? dash-length) (pos? dash-length)
+                          (number? gap-length) (not (neg? gap-length))
+                          (number? phase) (not (neg? phase))
+                          (vector? offsets) (seq offsets) (every? number? offsets)
+                          (every? #(< (#?(:clj Math/abs :cljs js/Math.abs) %) (/ (:width spec) 2.0)) offsets)
+                          (number? clearance) (pos? clearance)
+                          (map? budget) (every? #(and (integer? %) (pos? %)) (map budget details)))
+             (throw (ex-info "invalid road marking contract" {:marking marking})))
+         subdivisions (quot (:base-subdivisions spec) (detail-divisor detail))
+         centers (centerline (:path spec) subdivisions)
+         distances (vec (reductions + 0.0 (map distance centers (rest centers))))
+         intervals (dash-intervals (peek distances) marking detail)
+         strips (for [offset offsets interval intervals]
+                  (marking-strip (:terrain spec) (:clearance spec) (:camber spec)
+                                 (/ (:width spec) 2.0)
+                                 {:width width :clearance clearance
+                                  :uv-scale (:uv-scale spec) :offset offset}
+                                 (interval-samples centers distances interval)))]
+     (combine-meshes strips))))
+
 (defn road-mesh-parts
   "Material-separable meshes derived from the exact same ribbon rows.
    `:surface` is the carriageway; `:shoulder` combines both soil/gravel strips.
@@ -190,7 +282,8 @@
    (let [mesh (road-mesh spec detail)]
      {:surface (select-strip mesh 5 [1 2 3])
       :shoulder (combine-meshes [(select-strip mesh 5 [0 1])
-                                 (select-strip mesh 5 [3 4])])})))
+                                 (select-strip mesh 5 [3 4])])
+      :marking (marking-mesh spec detail)})))
 
 (defn road-lods [spec]
   (mapv (fn [[detail min-pixels]]
