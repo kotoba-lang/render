@@ -69,6 +69,18 @@
              [grass soil rock]))
          (map vector (partition 3 positions) (partition 3 normals)))))
 
+(defn layer-indices
+  "Return shader-order `[grass soil rock]` zero-based texture-array indices.
+   Layers may be reordered or placed anywhere in a host material library."
+  ([] (layer-indices default-biome))
+  ([{:keys [layers]}]
+   (let [by-id (into {} (map (juxt :id :texture-layer) layers))
+         result (mapv by-id [:grass :soil :rock])]
+     (when-not (every? #(and (integer? %) (<= 0 %)) result)
+       (throw (ex-info "terrain biome layer indices must be non-negative integers"
+                       {:indices result :layers layers})))
+     result)))
+
 (defn webgpu-contract
   "Validated data-only contract consumable by WebGPU and WGSL adapters."
   ([] (webgpu-contract default-biome))

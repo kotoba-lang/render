@@ -35,3 +35,12 @@
     (is (= (quot (count (first mesh)) 3) (count weights)))
     (is (every? #(= 3 (count %)) weights))
     (is (every? #(< (Math/abs (- 1.0 (reduce + %))) 1.0e-9) weights))))
+
+(deftest texture-array-layer-mapping-is-data-driven
+  (is (= [2 1 3] (biome/layer-indices)))
+  (let [custom (assoc biome/default-biome :layers
+                      (mapv #(assoc %1 :texture-layer %2)
+                            (:layers biome/default-biome) [4 0 7]))]
+    (is (= [4 0 7] (biome/layer-indices custom))))
+  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+               (biome/layer-indices (assoc-in biome/default-biome [:layers 0 :texture-layer] -1)))))
