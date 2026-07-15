@@ -27,3 +27,9 @@
                                           [(env/cube-level 4 (faces 4 [0 0 0 255]))]
                                           :linear)
                    :brdf-lut (texture/rgba8 1 1 [0 0 0 255] :linear)})))))
+
+(deftest neutral-environment-keeps-runtime-bindings-complete
+  (is (= :kotoba.render/pbr-environment-v1
+         (:schema env/neutral-pbr-environment)))
+  (is (= 6 (count (get-in env/neutral-pbr-environment
+                           [:irradiance :levels 0 :faces])))))
