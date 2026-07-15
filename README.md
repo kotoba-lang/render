@@ -1,5 +1,12 @@
 # kotoba-lang/render
 
+## Procedural vegetation
+
+`kotoba.render.vegetation` provides deterministic broadleaf, conifer and shrub
+meshes with high/low screen-space LODs, explicit bounds and generic WebGPU mesh
+registration data. Mesh tuples remain compatible with the existing loaded-mesh
+and tangent-interleaving pipeline.
+
 ## Procedural building silhouettes
 
 `kotoba.render.building/building-mesh` generates deterministic stepped-tower
