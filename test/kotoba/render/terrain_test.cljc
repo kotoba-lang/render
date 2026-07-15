@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is]]
             [kotoba.render.lod :as lod]
             [kotoba.render.mesh :as mesh]
-            [kotoba.render.terrain :as terrain]))
+            [kotoba.render.terrain :as terrain]
+            [kotoba.render.terrain-biome :as terrain-biome]))
 
 (def base {:patch [0 0] :size 64.0 :base-segments 32 :amplitude 9.0
            :seed 2654435769 :skirt-depth 3.0})
@@ -72,3 +73,37 @@
                          [base :ultra]]]
     (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                  (terrain/terrain-mesh spec detail)))))
+
+(deftest registered-meshes-carry-default-biomes-through-every-lod-and-skirt
+  (let [registration-spec (assoc base :base-segments 8)
+        registry (terrain/webgpu-registration :island registration-spec)]
+    (doseq [[detail divisor] terrain/detail-divisor
+            :let [mesh (get-in registry [(keyword (str "island-" (name detail))) :mesh])
+                  vertex-count (count (:positions mesh))
+                  segments (quot (:base-segments registration-spec) divisor)
+                  surface-count (* (inc segments) (inc segments))]]
+      (is (> vertex-count surface-count) "registration includes lowered skirt vertices")
+      (is (= vertex-count (count (:normals mesh)) (count (:uvs mesh))
+             (count (:biome-weights mesh)) (count (:biome-layer-indices mesh))))
+      (is (every? #(= [2 1 3] %) (:biome-layer-indices mesh)))
+      (is (every? #(and (= 3 (count %))
+                         (< (#?(:clj Math/abs :cljs js/Math.abs)
+                             (- 1.0 (reduce + %)))
+                            1.0e-9))
+                  (:biome-weights mesh))))))
+
+(deftest registered-meshes-repeat-custom-data-driven-layer-indices
+  (let [custom-biome (assoc terrain-biome/default-biome :layers
+                            (mapv #(assoc %1 :texture-layer %2)
+                                  (:layers terrain-biome/default-biome) [4 0 7]))
+        registry (terrain/webgpu-registration
+                  :custom (assoc base :base-segments 8 :biome custom-biome))]
+    (doseq [detail terrain/details
+            :let [mesh (get-in registry [(keyword (str "custom-" (name detail))) :mesh])]]
+      (is (= (count (:positions mesh)) (count (:biome-weights mesh))
+             (count (:biome-layer-indices mesh))))
+      (is (every? #(= [4 0 7] %) (:biome-layer-indices mesh)))
+      (is (every? #(< (#?(:clj Math/abs :cljs js/Math.abs)
+                         (- 1.0 (reduce + %)))
+                      1.0e-9)
+                  (:biome-weights mesh))))))
