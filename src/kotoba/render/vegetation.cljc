@@ -92,12 +92,14 @@
         crown-depth (* depth (seed-scale seed 10 0.10))
         trunk (trunk-part trunk-r trunk-h (if (= detail :high) 8 5))]
     (if (= detail :low)
-      [trunk
+      {:trunk [trunk]
+       :foliage [
        (ellipsoid-part [(* crown-width 0.92) (* height 0.34) (* crown-depth 0.86)]
                        [lean-x (* height 0.76) lean-z] 4 7)
        (ellipsoid-part [(* crown-width 0.58) (* height 0.27) (* crown-depth 0.58)]
-                       [(* lean-x -0.4) (* height 0.91) (* lean-z -0.4)] 3 6)]
-      [trunk
+                       [(* lean-x -0.4) (* height 0.91) (* lean-z -0.4)] 3 6)]}
+      {:trunk [trunk]
+       :foliage [
        ;; The crown is layered vertically and laterally so its outline reads as
        ;; a tree from every azimuth instead of a single ball or stacked box.
        (ellipsoid-part [(* crown-width 0.72) (* height 0.32) (* crown-depth 0.80)]
@@ -109,30 +111,32 @@
                        [(+ lean-x (* width 0.19)) (* height 0.74)
                         (+ lean-z (seed-offset seed 2 (* depth 0.14)))] 5 9)
        (ellipsoid-part [(* crown-width 0.60) (* height 0.20) (* crown-depth 0.56)]
-                       [(* lean-x 0.5) (* height 0.89) (* lean-z 0.5)] 6 10)])))
+                       [(* lean-x 0.5) (* height 0.89) (* lean-z 0.5)] 6 10)]})))
 
 (defn- conifer [{:keys [width depth height seed]} detail]
   (let [radius (* 0.5 (min width depth) (seed-scale seed 11 0.08))
         trunk (trunk-part (* radius 0.14) (* height 0.28) (if (= detail :high) 8 5))]
     (if (= detail :low)
-      [trunk
+      {:trunk [trunk]
+       :foliage [
        (cone radius (* height 0.74) 7 (* height 0.13))
-       (cone (* radius 0.62) (* height 0.48) 7 (* height 0.50))]
-      [trunk
+       (cone (* radius 0.62) (* height 0.48) 7 (* height 0.50))]}
+      {:trunk [trunk]
+       :foliage [
        ;; Overlapping skirts preserve the stepped branch silhouette while the
        ;; narrow top keeps the species readable at distance.
        (cone radius (* height 0.40) 12 (* height 0.12))
        (cone (* radius 0.86) (* height 0.38) 12 (* height 0.30))
        (cone (* radius 0.68) (* height 0.36) 11 (* height 0.49))
-       (cone (* radius 0.48) (* height 0.32) 10 (* height 0.68))])))
+       (cone (* radius 0.48) (* height 0.32) 10 (* height 0.68))]})))
 
 (defn- shrub [{:keys [width depth height seed]} detail]
   (let [lean-x (seed-offset seed 12 (* width 0.08))
         lean-z (seed-offset seed 13 (* depth 0.08))]
     (if (= detail :low)
-      [(ellipsoid-part [(* width 0.94) (* height 0.78) (* depth 0.92)]
-                       [lean-x (* height 0.39) lean-z] 3 6)]
-      [(ellipsoid-part [(* width 0.68) (* height 0.78) (* depth 0.80)]
+      {:foliage [(ellipsoid-part [(* width 0.94) (* height 0.78) (* depth 0.92)]
+                                 [lean-x (* height 0.39) lean-z] 3 6)]}
+      {:foliage [(ellipsoid-part [(* width 0.68) (* height 0.78) (* depth 0.80)]
                        [lean-x (* height 0.39) lean-z] 5 9)
        (ellipsoid-part [(* width 0.52) (* height 0.67) (* depth 0.58)]
                        [(+ lean-x (* width -0.18)) (* height 0.34)
@@ -142,18 +146,31 @@
                         (+ lean-z (seed-offset seed 6 (* depth 0.14)))] 4 8)
        (ellipsoid-part [(* width 0.46) (* height 0.56) (* depth 0.48)]
                        [(seed-offset seed 14 (* width 0.16)) (* height 0.66)
-                        (seed-offset seed 15 (* depth 0.16))] 4 8)])))
+                        (seed-offset seed 15 (* depth 0.16))] 4 8)]})))
+
+(defn vegetation-parts
+  "Return material-separable `{:trunk mesh :foliage mesh}` for one LOD.
+   Shrubs intentionally omit `:trunk`. Each mesh retains the portable
+   `[positions normals uvs indices]` contract."
+  ([spec] (vegetation-parts spec :high))
+  ([{:keys [variant] :as spec} detail]
+   (let [spec (assoc spec :seed (or (:seed spec) 0))]
+     (validate! spec detail)
+     (reduce-kv (fn [result part meshes]
+                  (assoc result part (combine meshes)))
+                {}
+                (case variant
+                  :broadleaf (broadleaf spec detail)
+                  :conifer (conifer spec detail)
+                  :shrub (shrub spec detail))))))
 
 (defn vegetation-mesh
   "Return `[positions normals uvs indices]` for a deterministic vegetation LOD."
   ([spec] (vegetation-mesh spec :high))
-  ([{:keys [variant] :as spec} detail]
+  ([spec detail]
    (let [spec (assoc spec :seed (or (:seed spec) 0))]
      (validate! spec detail)
-     (combine (case variant
-                :broadleaf (broadleaf spec detail)
-                :conifer (conifer spec detail)
-                :shrub (shrub spec detail))))))
+     (combine (vals (vegetation-parts spec detail))))))
 
 (defn bounds [{:keys [width depth height]}]
   {:min [(- (/ width 2.0)) 0.0 (- (/ depth 2.0))]
@@ -179,3 +196,19 @@
                        :normals (mapv vec (partition 3 normals))
                        :indices indices}
                 :bounds bounds :triangle-count triangle-count}])))
+
+(defn webgpu-parts-registration
+  "Register material-separable vegetation parts. Keys are
+   `<id>-<part>-high|low`; shrubs only emit foliage keys."
+  [registration-id spec]
+  (into {}
+        (for [detail [:high :low]
+              [part generated] (vegetation-parts spec detail)
+              :let [[positions normals _uvs indices] generated
+                    key (keyword (str (name registration-id) "-" (name part) "-" (name detail)))]]
+          [key {:type :mesh
+                :mesh {:positions (mapv vec (partition 3 positions))
+                       :normals (mapv vec (partition 3 normals))
+                       :indices indices}
+                :part part :bounds (bounds spec)
+                :triangle-count (quot (count indices) 3)}])))

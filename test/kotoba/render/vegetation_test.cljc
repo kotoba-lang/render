@@ -64,6 +64,18 @@
     (is (every? #(= :mesh (:type %)) (vals registry)))
     (is (every? #(seq (get-in % [:mesh :positions])) (vals registry)))))
 
+(deftest portable-parts-separate-trunk-and-foliage-without-breaking-single-mesh
+  (doseq [spec specs detail [:high :low]
+          :let [parts (vegetation/vegetation-parts spec detail)
+                registry (vegetation/webgpu-parts-registration :plant spec)]]
+    (is (= (if (= :shrub (:variant spec)) #{:foliage} #{:trunk :foliage})
+           (set (keys parts))))
+    (is (every? #(seq (first %)) (vals parts)))
+    (is (= (reduce + (map #(count (nth % 3)) (vals parts)))
+           (count (nth (vegetation/vegetation-mesh spec detail) 3))))
+    (is (= (if (= :shrub (:variant spec)) 2 4) (count registry)))
+    (is (every? #{:trunk :foliage} (map :part (vals registry))))))
+
 (deftest rejects-invalid-specs
   (doseq [[spec detail] [[(assoc (first specs) :variant :palm) :high]
                          [(assoc (first specs) :height 0) :high]
