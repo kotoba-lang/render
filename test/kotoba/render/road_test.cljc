@@ -60,7 +60,8 @@
 (deftest registration-exposes-portable-high-medium-low-meshes
   (let [registry (road/webgpu-registration :coast spec)]
     (is (= #{:coast-surface-high :coast-surface-medium :coast-surface-low
-             :coast-shoulder-high :coast-shoulder-medium :coast-shoulder-low}
+             :coast-shoulder-high :coast-shoulder-medium :coast-shoulder-low
+             :coast-marking-high :coast-marking-medium :coast-marking-low}
            (set (keys registry))))
     (is (every? #(= :mesh (:type %)) (vals registry)))
     (is (apply > (mapv #(get-in registry [% :triangle-count])
@@ -87,3 +88,41 @@
     (is (<= (radius outer-left) (+ (* half-total limit) 1.0e-9)))
     (is (<= (radius outer-right) (+ (* half-total limit) 1.0e-9)))
     (is (= [10.0 (second center) 0.0] center))))
+
+(deftest markings-are-deterministic-material-separated-and-terrain-following
+  (doseq [detail road/details]
+    (let [[positions normals uvs indices :as mesh] (road/marking-mesh spec detail)
+          vertices (partition 3 positions)
+          expected-lift (+ (:clearance spec) (:camber spec)
+                           (:clearance road/default-marking))]
+      (is (= mesh (road/marking-mesh spec detail)))
+      (is (= (count vertices) (quot (count normals) 3) (quot (count uvs) 2)))
+      (is (every? #(< -1 % (count vertices)) indices))
+      (is (every? (fn [[x y z]]
+                    (< (Math/abs (- y (+ (road/terrain-height terrain x z) expected-lift)))
+                       1.0e-9))
+                  vertices)
+          "every marking vertex follows terrain instead of bridging slope chords"))))
+
+(deftest dash-triangles-never-bridge-authored-gaps
+  (let [[_ _ uvs indices] (road/marking-mesh spec :high)
+        uv-pairs (vec (partition 2 uvs))
+        max-dash-v (/ (:dash-length road/default-marking) (:uv-scale spec))]
+    (doseq [triangle (partition 3 indices)
+            :let [vs (map #(second (nth uv-pairs %)) triangle)]]
+      (is (<= (- (apply max vs) (apply min vs)) (+ max-dash-v 1.0e-9))))))
+
+(deftest marking-budget-caps-dashes-and-lod-reduces-tessellation
+  (let [budgeted (assoc spec :path [[0.0 0.0] [200.0 0.0]]
+                        :marking (assoc road/default-marking
+                                        :budget {:high 2 :medium 2 :low 2}))
+        meshes (mapv #(road/marking-mesh budgeted %) road/details)
+        triangles (mapv #(quot (count (nth % 3)) 3) meshes)
+        high-vs (map second (partition 2 (nth (first meshes) 2)))
+        normal-lod-triangles (mapv #(quot (count (nth (road/marking-mesh spec %) 3)) 3)
+                                   road/details)]
+    (is (= [4 4 4] triangles) "two budgeted dashes are two quads at every LOD")
+    (is (> (first normal-lod-triangles) (last normal-lod-triangles))
+        "high detail retains more slope-following rows than low detail")
+    (is (<= (apply max high-vs) (/ 9.0 (:uv-scale spec)))
+        "two 3m dashes separated by a 3m gap exhaust the deterministic budget")))
