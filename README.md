@@ -1,5 +1,13 @@
 # kotoba-lang/render
 
+## Procedural building silhouettes
+
+`kotoba.render.building/building-mesh` generates deterministic stepped-tower
+and industrial-block geometry as the existing `[positions normals uvs indices]`
+tuple. `building-lods` supplies high, medium and low forms ordered for the
+shared screen-space LOD selector. Generated geometry can flow directly through
+`loaded-mesh`, tangent computation and 48-byte tangent interleaving.
+
 ## Deterministic procedural materials
 
 `kotoba.render.procedural/bake-pbr-material` builds complete steel, masonry and
