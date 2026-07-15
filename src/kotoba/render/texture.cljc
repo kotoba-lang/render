@@ -89,3 +89,54 @@
    portable fallbacks. Unknown keys are retained for forward-compatible hosts."
   [textures]
   (merge fallback-textures (or textures {})))
+
+(defn- solid-rgba8
+  [width height pixel color-space]
+  (rgba8 width height (vec (mapcat identity (repeat (* width height) pixel)))
+         color-space))
+
+(def ^:private fallback-spec
+  {:albedo {:pixel white-pixel :color-space :srgb}
+   :normal {:pixel normal-pixel :color-space :linear}
+   :metallic-roughness {:pixel mr-pixel :color-space :linear}})
+
+(defn pbr-texture-library
+  "Build a texture-array-ready vector of PBR texture sets.
+
+   Every layer has all three glTF metallic-roughness channels. Missing maps are
+   expanded from spec-correct solid fallbacks to the authored dimensions, and
+   each channel is required to have identical dimensions across layers. This
+   explicit constraint lets WebGPU/native hosts preserve one instanced draw and
+   select a material with a texture-array layer instead of changing bind groups.
+
+   `sets` may be nil/empty (one fallback layer), one legacy texture-set map, or a
+   vector of texture-set maps."
+  [sets]
+  (let [sets (cond
+               (or (nil? sets) (and (sequential? sets) (empty? sets))) [{}]
+               (map? sets) [sets]
+               (sequential? sets) (vec sets)
+               :else (throw (ex-info "PBR texture library must be a map or sequence"
+                                     {:value sets})))
+        kinds (keys fallback-spec)
+        dimensions
+        (into {}
+              (for [kind kinds
+                    :let [authored (keep #(get % kind) sets)
+                          dims (set (map (juxt :width :height) authored))]]
+                (do
+                  (when (> (count dims) 1)
+                    (throw (ex-info "texture-array layers must share dimensions"
+                                    {:kind kind :dimensions dims})))
+                  [kind (or (first dims) [1 1])])))]
+    (mapv
+     (fn [texture-set]
+       (reduce
+        (fn [result kind]
+          (let [[width height] (get dimensions kind)
+                descriptor (get texture-set kind)
+                {:keys [pixel color-space]} (get fallback-spec kind)]
+            (assoc result kind
+                   (or descriptor (solid-rgba8 width height pixel color-space)))))
+        (or texture-set {}) kinds))
+     sets)))

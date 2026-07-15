@@ -15,6 +15,22 @@
   (is (thrown? #?(:clj Exception :cljs js/Error)
                (tex/rgba8 2 2 [0 0 0 0] :linear))))
 
+(deftest texture-library-preserves-instancing-compatible-layers
+  (let [red (tex/rgba8 2 2 (vec (mapcat identity (repeat 4 [255 0 0 255]))) :srgb)
+        blue (tex/rgba8 2 2 (vec (mapcat identity (repeat 4 [0 0 255 255]))) :srgb)
+        library (tex/pbr-texture-library [{:albedo red} {:albedo blue}])]
+    (is (= 2 (count library)))
+    (is (= [red blue] (mapv :albedo library)))
+    (is (every? #(= [1 1] ((juxt :width :height) (:normal %))) library)
+        "missing normal maps remain spec-correct and match across layers")
+    (is (every? #(= 4 (count (get-in % [:metallic-roughness :data])))
+                library)))
+  (is (thrown-with-msg?
+       #?(:clj Exception :cljs js/Error) #"share dimensions"
+       (tex/pbr-texture-library
+        [{:albedo (tex/rgba8 1 1 tex/white-pixel :srgb)}
+         {:albedo (tex/rgba8 2 2 (vec (repeat 16 255)) :srgb)}]))))
+
 (deftest mip-level-calculation
   (is (= (tex/mip-level-count 1024 1024) 11))
   (is (= (tex/mip-level-count 4 4) 3))
