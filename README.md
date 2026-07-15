@@ -218,3 +218,12 @@ scene geometry keys.
 ## License
 
 Apache License 2.0.
+
+## Terrain-following road ribbons
+
+`kotoba.render.road` bakes a whole polyline into one continuous indexed ribbon.
+It samples `kotoba.render.terrain/height-at` through a canonical bilinear sampler,
+shares junction rows, keeps distance-based UVs continuous, and limits sharp-corner
+miters. `road-mesh-parts` exposes separate `:surface` and `:shoulder` meshes with
+byte-equal shared boundaries so executors can bind distinct PBR materials without
+reintroducing seams. `webgpu-registration` emits high/medium/low keys per part.
