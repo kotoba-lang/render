@@ -82,6 +82,9 @@
     (is (= (reduce + (map #(count (nth % 3)) (vals parts)))
            (count (nth (vegetation/vegetation-mesh spec detail) 3))))
     (is (= (if (= :shrub (:variant spec)) 2 4) (count registry)))
+    (is (every? #(= (count (get-in % [:mesh :positions]))
+                     (count (get-in % [:mesh :uvs])))
+                (vals registry)))
     (is (every? #{:trunk :foliage} (map :part (vals registry))))))
 
 (deftest rejects-invalid-specs

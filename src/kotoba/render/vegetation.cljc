@@ -205,11 +205,12 @@
   (into {}
         (for [detail [:high :low]
               [part generated] (vegetation-parts spec detail)
-              :let [[positions normals _uvs indices] generated
+              :let [[positions normals uvs indices] generated
                     key (keyword (str (name registration-id) "-" (name part) "-" (name detail)))]]
           [key {:type :mesh
                 :mesh {:positions (mapv vec (partition 3 positions))
                        :normals (mapv vec (partition 3 normals))
+                       :uvs (mapv vec (partition 2 uvs))
                        :indices indices}
                 :part part :bounds (bounds spec)
                 :triangle-count (quot (count indices) 3)}])))
