@@ -140,7 +140,7 @@ than checking thousands of handwritten integers into a scene:
 clojure -M:ibl-bake --out target/ibl/studio-pbr-environment.edn.gz
 ```
 
-The deterministic defaults produce a 32px diffuse irradiance cube, a 128px
+The deterministic defaults produce a daylight-balanced 32px diffuse irradiance cube, a 128px
 GGX-prefiltered specular cube with its complete 128→1 roughness mip chain, and
 a 128×128 split-sum BRDF LUT. The gzip EDN expands directly to the existing
 `:kotoba.render/pbr-environment-v1` map and is validated again by
@@ -151,6 +151,11 @@ scene data. A build adapter can call `read-baked`; a browser adapter can fetch,
 decompress and EDN-read it before renderer initialization. In both cases the
 decoded value is passed through the existing `:environment` option—there is no
 new runtime render contract and no convolution on the render thread.
+
+The analytic daylight base is bounded linear RGB with a cool sky and warm
+ground bounce. It is calibrated for the renderer's default exposure (`1.0`);
+applications should adjust exposure only for artistic intent, not to recover
+black-crushed detail from the environment asset.
 
 For a custom offline profile, call
 `kotoba.render.environment-bake/bake-environment` with the same keys as

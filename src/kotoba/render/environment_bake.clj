@@ -58,14 +58,15 @@
        :+z [u v 1.0] :-z [(- u) v -1.0]))))
 
 (defn studio-radiance
-  "Analytic, seam-free source environment: cool sky, warm ground and a broad
-   key light. Values are linear and intentionally bounded for RGBA8 output."
+  "Analytic, seam-free daylight environment: cool sky, warm ground and a broad
+   key light. The ambient floor is 3.5x the original dim studio bake so the
+   default exposure retains shadow detail. Values remain bounded linear RGB."
   [[x y z]]
   (let [sky-t (clamp (* 0.5 (+ y 1.0)) 0.0 1.0)
-        base (mapv + (mul [0.055 0.075 0.12] sky-t)
-                   (mul [0.09 0.065 0.045] (- 1.0 sky-t)))
+        base (mapv + (mul [0.1925 0.2625 0.42] sky-t)
+                   (mul [0.315 0.2275 0.1575] (- 1.0 sky-t)))
         sun (Math/pow (max 0.0 (dot [x y z] (normalize [-0.48 0.72 0.50]))) 96.0)]
-    (mapv #(clamp % 0.0 1.0) (add base (mul [1.0 0.72 0.42] (* 0.92 sun))))))
+    (mapv #(clamp % 0.0 1.0) (add base (mul [1.0 0.72 0.42] (* 0.72 sun))))))
 
 (defn- cosine-direction [xi]
   (let [r (Math/sqrt (first xi)) theta (* 2.0 Math/PI (second xi))]

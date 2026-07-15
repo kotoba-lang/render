@@ -12,6 +12,24 @@
   (is (>= (:specular-size bake/production-config) 128))
   (is (>= (:brdf-size bake/production-config) 128)))
 
+(deftest daylight-source-has-bounded-energy-and-warm-cool-separation
+  (let [sky (bake/studio-radiance [0.0 1.0 0.0])
+        ground (bake/studio-radiance [0.0 -1.0 0.0])
+        directions [[1.0 0.0 0.0] [-1.0 0.0 0.0]
+                    [0.0 1.0 0.0] [0.0 -1.0 0.0]
+                    [0.0 0.0 1.0] [0.0 0.0 -1.0]]]
+    (is (every? true? (map #(< (Math/abs (- %1 %2)) 1.0e-12)
+                           sky [0.1925 0.2625 0.42]))
+        "cool daylight sky is a stable golden")
+    (is (every? true? (map #(< (Math/abs (- %1 %2)) 1.0e-12)
+                           ground [0.315 0.2275 0.1575]))
+        "warm bounce is a stable golden")
+    (is (> (nth sky 2) (nth sky 0)) "sky remains cool")
+    (is (> (first ground) (nth ground 2)) "ground remains warm")
+    (is (every? #(every? (fn [channel] (<= 0.0 channel 1.0))
+                         (bake/studio-radiance %))
+                directions))))
+
 (deftest deterministic-bake-emits-existing-contract
   (let [a (bake/bake-environment tiny-config)
         b (bake/bake-environment tiny-config)]
