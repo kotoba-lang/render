@@ -26,6 +26,11 @@ platform.
 | `kotoba.render.logo` | `logo.rs` | Boot-logo SVG + brand colors + splash-screen fade/progress timing state machine |
 | `kotoba.render.raytrace` | `raytrace.rs` | `RtGlobals` uniform constructor (the CPU-side data the RT compute pass uploads) |
 | `kotoba.render.bits` | (new) | Shared byte/IEEE754 helpers (`f32-le`, `half->f32`, `i24-le`, `i32-bits->f32`, ...) used across the loaders/decoders above |
+| `kotoba.render.material` | shared contract | Validated metallic/roughness PBR material data and fixed-shape GPU uniform packing |
+| `kotoba.render.shadow` | shared contract | Cascaded directional-shadow split, atlas, bias, and pass planning |
+| `kotoba.render.post-process` | shared contract | HDR frame graphs: SSAO/SSR/bloom/DoF/motion blur/tone mapping/AA/color grading |
+| `kotoba.render.lod` | shared contract | Screen-space LOD with hysteresis and deterministic density budgets |
+| `kotoba.render.quality` | shared contract | Versioned mobile/balanced/high/cinematic plans for SDK, Studio, and backends |
 | `kotoba.render.uastc` + `kotoba.render.basisu` | `basisu.rs` + `uastc_tables.rs` + `uastc_vectors.rs` | The **UASTC (Universal ASTC) LDR 4×4 block decoder** — a faithful `unpack_uastc` port (Huffman mode table, subset/partition patterns, dual-plane, trit/quint BISE endpoint decode, ASTC endpoint unquantization + weight interpolation) — plus KTX2 container parsing (`KHR_texture_basisu`, UASTC-only; ETC1S reported unsupported). Lookup tables machine-extracted verbatim from the Rust source. Validated bit-exact against the Rust source's own reference-encoder vectors (`uastc_vectors.rs`) — **see the UASTC mode-coverage note below** |
 
 `clojure -M:test` — **66 tests, 1068 assertions, 0 failures.** Several suites
