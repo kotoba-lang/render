@@ -26,6 +26,27 @@
       (is (= :high (:id (lod/select-level levels 80.0))))
       (is (= :low (:id (lod/select-level levels 20.0)))))))
 
+(defn- axis-extent [positions axis]
+  (let [values (map #(nth % axis) (partition 3 positions))]
+    (- (apply max values) (apply min values))))
+
+(deftest silhouettes-use-the-authored-footprint-and-retain-low-lod-character
+  (doseq [{:keys [width depth height] :as spec} specs
+          detail [:high :low]
+          :let [[positions] (vegetation/vegetation-mesh spec detail)]]
+    ;; Prevent the old box/pole failure mode: foliage must occupy most of the
+    ;; authored horizontal footprint and a useful fraction of its full height.
+    (is (> (axis-extent positions 0) (* width 0.72)) [(:variant spec) detail :width])
+    (is (> (axis-extent positions 2) (* depth 0.68)) [(:variant spec) detail :depth])
+    (is (> (axis-extent positions 1) (* height 0.72)) [(:variant spec) detail :height])))
+
+(deftest seeds-change-crown-silhouette-without-changing-topology
+  (doseq [spec specs
+          :let [[positions-a _ _ indices-a] (vegetation/vegetation-mesh spec :high)
+                [positions-b _ _ indices-b] (vegetation/vegetation-mesh (update spec :seed inc) :high)]]
+    (is (not= positions-a positions-b) (:variant spec))
+    (is (= indices-a indices-b) (:variant spec))))
+
 (deftest output-fits-loaded-and-tangent-pipelines
   (let [[positions normals uvs indices] (vegetation/vegetation-mesh (first specs) :high)
         loaded (mesh/loaded-mesh positions normals uvs indices)
