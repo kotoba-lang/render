@@ -6,7 +6,7 @@
    surfaces produce identical bytes without global RNG or floating point."
   (:require [kotoba.render.texture :as texture]))
 
-(def material-kinds #{:steel :masonry :ground :grass :soil :rock})
+(def material-kinds #{:steel :masonry :ground :grass :soil :rock :leaf-card :grass-blade})
 
 (defn- i32 [n]
   #?(:clj (unchecked-int n)
@@ -114,6 +114,28 @@
      :normal (if crack? [128 128 220 255] (normal-pixel seed x y 34))
      :metallic-roughness [0 (if crack? 244 (vary 202 30 grain)) 2 255]}))
 
+(defn- foliage-alpha [kind width height x y]
+  (let [u (/ (+ x 0.5) width)
+        v (/ (+ y 0.5) height)
+        cx (- (* 2.0 u) 1.0)
+        ;; leaf cards taper at both ends; grass blades taper only toward the tip.
+        radius (if (= kind :leaf-card)
+                 (* 0.92 #?(:clj (Math/sin (* Math/PI v))
+                            :cljs (js/Math.sin (* js/Math.PI v))))
+                 (* 0.72 (+ 0.12 v)))
+        inside? (< #?(:clj (Math/abs cx) :cljs (js/Math.abs cx)) radius)]
+    (if inside? 255 0)))
+
+(defn- foliage-pixel [kind width height seed x y]
+  (let [n (noise-byte seed x y 71)
+        alpha (foliage-alpha kind width height x y)
+        grass? (= kind :grass-blade)]
+    {:albedo [(vary (if grass? 38 32) 14 n)
+              (vary (if grass? 126 104) 26 n)
+              (vary (if grass? 34 43) 16 n) alpha]
+     :normal (normal-pixel seed x y 18)
+     :metallic-roughness [0 (vary 224 18 n) 0 255]}))
+
 (defn- validate-options! [{:keys [kind width height seed scale]}]
   (when-not (material-kinds kind)
     (throw (ex-info "unsupported procedural material kind"
@@ -140,14 +162,18 @@
                    :ground ground-pixel
                    :grass grass-pixel
                    :soil soil-pixel
-                   :rock rock-pixel)
+                   :rock rock-pixel
+                   :leaf-card nil
+                   :grass-blade nil)
         periodic-biome? (#{:grass :soil :rock} kind)
         pixels (for [y (range height) x (range width)]
                  ;; Dedicated terrain layers repeat without a border seam: the
                  ;; final row/column intentionally reproduce coordinate zero.
-                 (pixel-fn seed scale
-                           (if periodic-biome? (mod x (max 1 (dec width))) x)
-                           (if periodic-biome? (mod y (max 1 (dec height))) y)))
+                 (if (#{:leaf-card :grass-blade} kind)
+                   (foliage-pixel kind width height seed x y)
+                   (pixel-fn seed scale
+                             (if periodic-biome? (mod x (max 1 (dec width))) x)
+                             (if periodic-biome? (mod y (max 1 (dec height))) y))))
         channel (fn [k] (vec (mapcat k pixels)))]
     {:albedo (texture/rgba8 width height (channel :albedo) :srgb)
      :normal (texture/rgba8 width height (channel :normal) :linear)
