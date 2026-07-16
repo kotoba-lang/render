@@ -164,7 +164,10 @@
   (let [clamp (fn [lo hi x] (max lo (min hi (or x 0.0))))
         pitch (clamp -0.70 0.70 aim-pitch)
         look (clamp -0.85 0.85 head-yaw)
-        grip-angle (* 1.12 (clamp 0.0 1.0 grip))
+        ;; Skin matrices operate in mesh space, so a restrained curl preserves
+        ;; a readable five-digit silhouette instead of fanning thin phalanges
+        ;; through the foregrip at close-up distance.
+        grip-angle (* 0.28 (clamp 0.0 1.0 grip))
         expression-angle (* 0.18 (clamp 0.0 1.0 expression))
         orient (fn [side]
                  (let [[p r] (get foot-orientation side [0.0 0.0])]
