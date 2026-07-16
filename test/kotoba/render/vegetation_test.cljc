@@ -7,7 +7,8 @@
 (def specs
   [{:variant :broadleaf :width 5.0 :depth 5.0 :height 9.0 :seed 11}
    {:variant :conifer :width 4.0 :depth 4.0 :height 11.0 :seed 22}
-   {:variant :shrub :width 3.0 :depth 2.5 :height 1.8 :seed 33}])
+   {:variant :shrub :width 3.0 :depth 2.5 :height 1.8 :seed 33}
+   {:variant :grass-tuft :width 1.8 :depth 1.5 :height 0.9 :seed 44}])
 
 (deftest variants-are-deterministic-and-well-formed
   (doseq [spec specs detail [:high :low]]
@@ -76,16 +77,28 @@
   (doseq [spec specs detail [:high :low]
           :let [parts (vegetation/vegetation-parts spec detail)
                 registry (vegetation/webgpu-parts-registration :plant spec)]]
-    (is (= (if (= :shrub (:variant spec)) #{:foliage} #{:trunk :foliage})
+    (is (= (if (#{:shrub :grass-tuft} (:variant spec)) #{:foliage} #{:trunk :foliage})
            (set (keys parts))))
     (is (every? #(seq (first %)) (vals parts)))
     (is (= (reduce + (map #(count (nth % 3)) (vals parts)))
            (count (nth (vegetation/vegetation-mesh spec detail) 3))))
-    (is (= (if (= :shrub (:variant spec)) 2 4) (count registry)))
+    (is (= (if (#{:shrub :grass-tuft} (:variant spec)) 2 4) (count registry)))
     (is (every? #(= (count (get-in % [:mesh :positions]))
                      (count (get-in % [:mesh :uvs])))
                 (vals registry)))
     (is (every? #{:trunk :foliage} (map :part (vals registry))))))
+
+(deftest grass-ground-cover-is-crossed-seed-driven-and-budgeted
+  (let [spec (last specs)
+        [high-pos _ _ high-indices] (vegetation/vegetation-mesh spec :high)
+        [low-pos _ _ low-indices] (vegetation/vegetation-mesh spec :low)
+        [other-pos] (vegetation/vegetation-mesh (update spec :seed inc) :high)]
+    (is (= 36 (quot (count high-indices) 3)) "9 blades x 2 ribbons x 2 faces")
+    (is (= 12 (quot (count low-indices) 3)) "far LOD keeps 3 crossed blades")
+    (is (> (axis-extent high-pos 0) (* 0.72 (:width spec))))
+    (is (> (axis-extent high-pos 2) (* 0.68 (:depth spec))))
+    (is (not= high-pos other-pos))
+    (is (< (count low-pos) (count high-pos)))))
 
 (deftest rejects-invalid-specs
   (doseq [[spec detail] [[(assoc (first specs) :variant :palm) :high]

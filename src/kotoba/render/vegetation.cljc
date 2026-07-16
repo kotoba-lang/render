@@ -3,7 +3,7 @@
   (:require [kotoba.render.mesh :as mesh]
             [kotoba.render.procedural :as procedural]))
 
-(def variants #{:broadleaf :conifer :shrub})
+(def variants #{:broadleaf :conifer :shrub :grass-tuft})
 (def details #{:high :low})
 
 (defn- validate! [{:keys [variant width depth height seed]} detail]
@@ -148,6 +148,45 @@
                        [(seed-offset seed 14 (* width 0.16)) (* height 0.66)
                         (seed-offset seed 15 (* depth 0.16))] 4 8)]})))
 
+(defn- blade
+  "A tapered, double-sided blade. Two crossed ribbons keep the tuft readable
+   from every gameplay azimuth without depending on alpha textures."
+  [x z height width lean-x lean-z]
+  (let [ribbon (fn [[rx rz] [sx sz]]
+                 (let [bottom-left  [(+ x (* rx (- width))) 0.0 (+ z (* rz (- width)))]
+                       bottom-right [(+ x (* rx width)) 0.0 (+ z (* rz width))]
+                       tip          [(+ x lean-x (* sx width 0.18)) height
+                                     (+ z lean-z (* sz width 0.18))]
+                       n            (normalize [rz 0.18 (- rx)])
+                       back         (mapv - n)
+                       vertices     [{:p bottom-left :n n :uv [0.0 1.0]}
+                                     {:p bottom-right :n n :uv [1.0 1.0]}
+                                     {:p tip :n n :uv [0.5 0.0]}
+                                     {:p bottom-right :n back :uv [1.0 1.0]}
+                                     {:p bottom-left :n back :uv [0.0 1.0]}
+                                     {:p tip :n back :uv [0.5 0.0]}]]
+                   [(vec (mapcat :p vertices)) (vec (mapcat :n vertices))
+                    (vec (mapcat :uv vertices)) (vec (range 6))]))]
+    (combine [(ribbon [1.0 0.0] [0.0 1.0])
+              (ribbon [0.0 1.0] [1.0 0.0])])))
+
+(defn- grass-tuft [{:keys [width depth height seed]} detail]
+  (let [blade-count (if (= detail :high) 9 3)
+        meshes
+        (mapv (fn [i]
+                (let [[bx bz] (nth [[-0.40 -0.34] [0.40 -0.34] [0.0 0.40]
+                                    [-0.36 0.22] [0.36 0.22] [0.0 0.0]
+                                    [-0.20 -0.04] [0.20 -0.04] [0.0 0.20]] i)
+                      x (+ (* width bx) (seed-offset seed (+ 30 (* i 2)) (* width 0.10)))
+                      z (+ (* depth bz) (seed-offset seed (+ 31 (* i 2)) (* depth 0.10)))
+                      h (* height (seed-scale seed (+ 70 i) 0.22))
+                      w (* (min width depth) (if (= detail :high) 0.055 0.085))
+                      lx (seed-offset seed (+ 90 i) (* width 0.12))
+                      lz (seed-offset seed (+ 110 i) (* depth 0.12))]
+                  (blade x z h w lx lz)))
+              (range blade-count))]
+    {:foliage meshes}))
+
 (defn vegetation-parts
   "Return material-separable `{:trunk mesh :foliage mesh}` for one LOD.
    Shrubs intentionally omit `:trunk`. Each mesh retains the portable
@@ -162,7 +201,8 @@
                 (case variant
                   :broadleaf (broadleaf spec detail)
                   :conifer (conifer spec detail)
-                  :shrub (shrub spec detail))))))
+                  :shrub (shrub spec detail)
+                  :grass-tuft (grass-tuft spec detail))))))
 
 (defn vegetation-mesh
   "Return `[positions normals uvs indices]` for a deterministic vegetation LOD."
