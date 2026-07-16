@@ -7,6 +7,50 @@
 
 (def details #{:high :low})
 
+(def joint-order [:root :arm-left :arm-right :leg-left :leg-right])
+
+(defn- vertex-joint [{:keys [width height]} [x y _]]
+  (cond
+    (and (< y (* height 0.44)) (neg? x)) 3
+    (< y (* height 0.44)) 4
+    (and (< y (* height 0.78)) (< x (* width -0.27))) 1
+    (and (< y (* height 0.78)) (> x (* width 0.27))) 2
+    :else 0))
+
+(defn skinning-attributes
+  "Four-lane glTF-compatible joint/weight streams for a generated operator mesh.
+   The silhouette is segmented at anatomical part boundaries, so its one-hot
+   weights deliberately produce rigid skinning."
+  [spec positions]
+  (let [joints (mapv #(vector (vertex-joint spec %) 0 0 0) positions)]
+    {:joints joints
+     :weights (mapv (fn [_] [1.0 0.0 0.0 0.0]) joints)
+     :joint-order joint-order}))
+
+(defn- m4-rotate-x-around [[_ py pz] angle]
+  (let [c (#?(:clj Math/cos :cljs js/Math.cos) angle)
+        s (#?(:clj Math/sin :cljs js/Math.sin) angle)]
+    [1.0 0.0 0.0 0.0
+     0.0 c s 0.0
+     0.0 (- s) c 0.0
+     0.0 (+ (* (- 1.0 c) py) (* s pz))
+     (+ (* (- s) py) (* (- 1.0 c) pz)) 1.0]))
+
+(defn walk-palette
+  "Ordered column-major skin matrices for `joint-order`. `phase` is cycles and
+   `amount` is 0..1. Opposing arms and legs swing about authored pivots."
+  [{:keys [width height]} phase amount]
+  (let [pi #?(:clj Math/PI :cljs js/Math.PI)
+        wave (* (#?(:clj Math/sin :cljs js/Math.sin) (* 2.0 pi phase))
+                (min 1.0 (max 0.0 amount)))
+        arm (* 0.72 wave) leg (* 0.58 wave)
+        pivot (fn [x y] [(* width x) (* height y) 0.0])]
+    [[1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0]
+     (m4-rotate-x-around (pivot -0.39 0.71) arm)
+     (m4-rotate-x-around (pivot 0.39 0.71) (- arm))
+     (m4-rotate-x-around (pivot -0.19 0.43) (- leg))
+     (m4-rotate-x-around (pivot 0.19 0.43) leg)]))
+
 (defn- combine [meshes]
   (reduce (fn [[ps ns us is] [p n u idx]]
             (let [base (quot (count ps) 3)]
@@ -106,9 +150,12 @@
   (into {}
         (for [{detail :id :keys [mesh bounds triangle-count rig]} (character-lods spec)
               :let [[positions normals uvs indices] mesh
+                    positions3 (mapv vec (partition 3 positions))
+                    skin (skinning-attributes spec positions3)
                     key (keyword (str (name registration-id) "-" (name detail)))]]
           [key {:type :mesh
-                :mesh {:positions (mapv vec (partition 3 positions))
+                :mesh {:positions positions3
                        :normals (mapv vec (partition 3 normals))
-                       :uvs (mapv vec (partition 2 uvs)) :indices indices}
+                       :uvs (mapv vec (partition 2 uvs)) :indices indices
+                       :joints (:joints skin) :weights (:weights skin)}
                 :bounds bounds :triangle-count triangle-count :rig rig}])))

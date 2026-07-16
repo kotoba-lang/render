@@ -31,6 +31,26 @@
     (is (= {:min [-0.56 0.0 -0.325] :max [0.56 2.1 0.48750000000000004]}
            (:bounds (registry :operator-high))))))
 
+(deftest registration-carries-executable-skin-streams
+  (let [mesh (get-in (character/webgpu-registration :operator spec)
+                     [:operator-high :mesh])
+        n (count (:positions mesh))]
+    (is (= n (count (:joints mesh)) (count (:weights mesh))))
+    (is (= #{0 1 2 3 4} (set (map first (:joints mesh)))))
+    (is (every? #(= [1.0 0.0 0.0 0.0] %) (:weights mesh)))
+    (is (every? #(every? (fn [j] (< -1 j (count character/joint-order))) %)
+                (:joints mesh)))))
+
+(deftest walk-palette-is-deterministic-and-actually-poses-limbs
+  (let [rest (character/walk-palette spec 0.0 1.0)
+        moving (character/walk-palette spec 0.25 1.0)]
+    (is (= rest (character/walk-palette spec 0.0 1.0)))
+    (is (= (count character/joint-order) (count moving)))
+    (is (every? #(= 16 (count %)) moving))
+    (is (= (first rest) (first moving)) "root remains identity")
+    (is (not= (nth rest 1) (nth moving 1)) "arm palette changes")
+    (is (not= (nth moving 1) (nth moving 2)) "opposing limbs counter-swing")))
+
 (deftest weapon-side-changes-readable-silhouette-metadata
   (let [right (character/rig-metadata spec)
         left (character/rig-metadata (assoc spec :weapon-side :left))]
