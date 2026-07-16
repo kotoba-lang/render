@@ -55,6 +55,7 @@ platform.
 | `kotoba.render.mesh` | `mesh.rs` | Procedural mesh generators (sphere/plane/cube/hex-prism/cylinder-pipe/building-extrusion/hex-grid), vertex interleaving, MikkTSpace-lite tangent computation, grid-instance transform generation |
 | `kotoba.render.asset` | `asset.rs` | `AssetCache` — the mesh/material handle lookup table (a pure map; GPU handles are opaque values here) |
 | `kotoba.render.splat` | `splat.rs` | `SplatCloud` data + cull/bounds algorithms for 3D Gaussian Splatting |
+| `kotoba.render.streaming` | portable | Deterministic camera-centred residency, class radii, hysteretic LOD, and memory/draw evidence |
 | `kotoba.render.splat-loader` | `splat_loader.rs` | `.splat` (antimatter15), PLY (ASCII + binary), and SPZ (Niantic gzip container) Gaussian-splat parsers — bit-exact vs. the Rust source's own test fixtures |
 | `kotoba.render.meshopt` | `meshopt.rs` | The **full** `EXT_meshopt_compression` scalar decoder port: vertex-buffer, index-buffer, index-sequence codecs + oct/quat/exponential vertex filters — validated bit-exact against real `zeux/meshoptimizer` C++-encoder output embedded in the Rust source's tests |
 | `kotoba.render.gltf` | `gltf_loader.rs` | The pure pieces: `KHR_mesh_quantization` dequantization, GLB container framing (magic/chunks), base64 `data:` URI decode, per-triangle normal generation |
