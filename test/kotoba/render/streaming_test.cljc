@@ -35,3 +35,8 @@
     (is (= 1 (get-in teleported [:evidence :culled-count])))
     (is (= 0 (get-in teleported [:evidence :resident-bytes])))
     (is (= 12 (get-in origin [:evidence :resident-bytes])))))
+
+(deftest camera-cell-snaps-floating-point-noise-only
+  (is (= [0 0] (streaming/camera-cell {:cell-size 64.0} [0.0 0.0 -2.6e-13])))
+  (is (= [0 -1] (streaming/camera-cell {:cell-size 64.0} [0.0 0.0 -1.0e-6])))
+  (is (= [1 0] (streaming/camera-cell {:cell-size 64.0} [64.00000000001 0.0 0.0]))))
