@@ -28,8 +28,27 @@
            (set (keys (get-in registry [:operator-high :rig :sockets])))))
     (is (> (get-in registry [:operator-high :triangle-count])
            (get-in registry [:operator-low :triangle-count])))
-    (is (= {:min [-0.56 0.0 -0.325] :max [0.56 2.1 0.48750000000000004]}
+    (is (= {:min [-0.56 0.0 -0.42900000000000005]
+            :max [0.56 2.3310000000000004 0.7150000000000001]}
            (:bounds (registry :operator-high))))))
+
+(deftest high-lod-authors-readable-operator-and-rifle-detail
+  (let [high (first (character/character-lods spec))
+        low (second (character/character-lods spec))
+        high-ranges (:material-ranges high)
+        low-ranges (:material-ranges low)
+        roles #(set (map :role %))]
+    (is (= #{:fabric :skin :armour :armour-accent :visor :weapon :weapon-accent}
+           (roles high-ranges)))
+    (is (= #{:fabric :skin :armour :weapon :weapon-accent}
+           (roles low-ranges)))
+    (is (>= (count high-ranges) 27) "high LOD is a genuinely authored assembly")
+    (is (>= (count low-ranges) 16) "low LOD retains character and rifle silhouette")
+    (is (< (:triangle-count low) (* 0.70 (:triangle-count high))))
+    (is (= (count (get-in (character/webgpu-registration :operator spec)
+                          [:operator-high :mesh :indices]))
+           (reduce + (map :index-count high-ranges))))
+    (is (apply <= (map :index-start high-ranges)))))
 
 (deftest registration-carries-executable-skin-streams
   (let [mesh (get-in (character/webgpu-registration :operator spec)
