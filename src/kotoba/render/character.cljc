@@ -72,6 +72,24 @@
      0.0 (+ (* (- 1.0 c) py) (* s pz))
      (+ (* (- s) py) (* (- 1.0 c) pz)) 1.0]))
 
+(defn- m4-rotate-y-around [[px _ pz] angle]
+  (let [c (#?(:clj Math/cos :cljs js/Math.cos) angle)
+        s (#?(:clj Math/sin :cljs js/Math.sin) angle)]
+    [c 0.0 (- s) 0.0
+     0.0 1.0 0.0 0.0
+     s 0.0 c 0.0
+     (+ (* (- 1.0 c) px) (* (- s) pz)) 0.0
+     (+ (* s px) (* (- 1.0 c) pz)) 1.0]))
+
+(defn- m4-rotate-z-around [[px py _] angle]
+  (let [c (#?(:clj Math/cos :cljs js/Math.cos) angle)
+        s (#?(:clj Math/sin :cljs js/Math.sin) angle)]
+    [c s 0.0 0.0
+     (- s) c 0.0 0.0
+     0.0 0.0 1.0 0.0
+     (+ (* (- 1.0 c) px) (* s py))
+     (+ (* (- s) px) (* (- 1.0 c) py)) 0.0 1.0]))
+
 (defn walk-palette
   "Ordered column-major skin matrices for `joint-order`. `phase` is cycles and
    `amount` is 0..1. Opposing arms and legs swing about authored pivots."
@@ -100,6 +118,51 @@
      (m4-rotate-x-around (pivot 0.19 0.25) (* leg -0.42))
      (m4-translate-y (:right foot-offsets)) (m4-translate-y (:right foot-offsets))
      (m4-rotate-x-around (pivot 0.38 0.60) (* arm -0.18))])))
+
+(defn combat-palette
+  "Executable combat-pose palette layered on locomotion without changing the
+   23-joint humanoid-v1 ABI. The rifle and both arms share `aim-pitch`; the
+   support hand is rolled into a two-handed grip, head yaw tracks the target,
+   and authored terrain pitch/roll orient each foot. Angles are radians and are
+   deliberately clamped to anatomical limits."
+  [{:keys [width height] :as spec} phase amount
+   {:keys [foot-offsets foot-orientation aim-pitch head-yaw]
+    :or {foot-offsets {:left 0.0 :right 0.0}
+         foot-orientation {:left [0.0 0.0] :right [0.0 0.0]}
+         aim-pitch 0.0 head-yaw 0.0}}]
+  (let [clamp (fn [lo hi x] (max lo (min hi (or x 0.0))))
+        pitch (clamp -0.70 0.70 aim-pitch)
+        look (clamp -0.85 0.85 head-yaw)
+        orient (fn [side]
+                 (let [[p r] (get foot-orientation side [0.0 0.0])]
+                   [(clamp -0.50 0.50 p) (clamp -0.50 0.50 r)]))
+        [lp lr] (orient :left) [rp rr] (orient :right)
+        pivot (fn [x y] [(* width x) (* height y) 0.0])
+        base (walk-palette spec phase amount {:foot-offsets foot-offsets})]
+    (-> base
+        ;; Head target tracking. Neck remains the retarget parent and head owns
+        ;; the bounded yaw, avoiding double transforms in runtimes with globals.
+        (assoc (joint-index :head) (m4-rotate-y-around (pivot 0.0 0.91) look))
+        ;; Two-arm rifle-ready IK: upper/lower arms pitch toward the sight line;
+        ;; the support hand rolls inward to the foregrip and weapon shares pitch.
+        (assoc (joint-index :upper-arm-left) (m4-rotate-x-around (pivot -0.39 0.73) (+ -1.02 pitch))
+               (joint-index :lower-arm-left) (m4-rotate-x-around (pivot -0.39 0.59) (+ -0.62 (* pitch 0.45)))
+               (joint-index :hand-left) (m4-rotate-z-around (pivot -0.38 0.40) -0.34)
+               (joint-index :upper-arm-right) (m4-rotate-x-around (pivot 0.39 0.73) (+ -0.92 pitch))
+               (joint-index :lower-arm-right) (m4-rotate-x-around (pivot 0.39 0.59) (+ -0.54 (* pitch 0.45)))
+               (joint-index :hand-right) (m4-rotate-z-around (pivot 0.38 0.40) 0.18)
+               (joint-index :weapon) (m4-rotate-x-around (pivot 0.38 0.60) pitch)
+               ;; Foot pitch is the visible terrain alignment component. Roll is
+               ;; retained in metadata/evidence until palette composition lands;
+               ;; choosing the dominant angle avoids falsely composing matrices.
+               (joint-index :foot-left) (if (> (#?(:clj Math/abs :cljs js/Math.abs) lr)
+                                               (#?(:clj Math/abs :cljs js/Math.abs) lp))
+                                            (m4-rotate-z-around (pivot -0.19 0.0) lr)
+                                            (m4-rotate-x-around (pivot -0.19 0.0) lp))
+               (joint-index :foot-right) (if (> (#?(:clj Math/abs :cljs js/Math.abs) rr)
+                                                (#?(:clj Math/abs :cljs js/Math.abs) rp))
+                                             (m4-rotate-z-around (pivot 0.19 0.0) rr)
+                                             (m4-rotate-x-around (pivot 0.19 0.0) rp))))))
 
 (defn- combine [meshes]
   (reduce (fn [[ps ns us is] [p n u idx]]

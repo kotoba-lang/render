@@ -79,6 +79,24 @@
     (is (not= (nth rest 7) (nth moving 7)) "arm palette changes")
     (is (not= (nth moving 1) (nth moving 2)) "opposing limbs counter-swing")))
 
+(deftest combat-palette-executes-aim-grip-look-and-foot-orientation
+  (let [walk (character/walk-palette spec 0.25 0.8)
+        opts {:aim-pitch 0.31 :head-yaw -0.42
+              :foot-offsets {:left 0.05 :right -0.03}
+              :foot-orientation {:left [0.18 0.0] :right [0.0 -0.21]}}
+        combat (character/combat-palette spec 0.25 0.8 opts)]
+    (is (= combat (character/combat-palette spec 0.25 0.8 opts)))
+    (is (= 23 (count combat)))
+    (is (every? #(= 16 (count %)) combat))
+    (is (= (first walk) (first combat)) "root/entity motion ABI is unchanged")
+    (is (not= (nth walk (character/joint-index :head))
+              (nth combat (character/joint-index :head))))
+    (is (every? #(not= (nth walk (character/joint-index %))
+                       (nth combat (character/joint-index %)))
+                [:upper-arm-left :lower-arm-left :hand-left
+                 :upper-arm-right :lower-arm-right :hand-right :weapon
+                 :foot-left :foot-right]))))
+
 (deftest weapon-side-changes-readable-silhouette-metadata
   (let [right (character/rig-metadata spec)
         left (character/rig-metadata (assoc spec :weapon-side :left))]
