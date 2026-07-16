@@ -46,11 +46,11 @@
         high-ranges (:material-ranges high)
         low-ranges (:material-ranges low)
         roles #(set (map :role %))]
-    (is (= #{:fabric :skin :armour :armour-accent :visor :weapon :weapon-accent}
+    (is (= #{:fabric :skin :eye :armour :armour-accent :visor :weapon :weapon-accent}
            (roles high-ranges)))
     (is (= #{:fabric :skin :armour :weapon :weapon-accent}
            (roles low-ranges)))
-    (is (>= (count high-ranges) 27) "high LOD is a genuinely authored assembly")
+    (is (>= (count high-ranges) 50) "high LOD includes visible fingers and face controls")
     (is (>= (count low-ranges) 16) "low LOD retains character and rifle silhouette")
     (is (< (:triangle-count low) (* 0.70 (:triangle-count high))))
     (is (= (count (get-in (character/webgpu-registration :operator spec)
@@ -81,12 +81,12 @@
 
 (deftest combat-palette-executes-aim-grip-look-and-foot-orientation
   (let [walk (character/walk-palette spec 0.25 0.8)
-        opts {:aim-pitch 0.31 :head-yaw -0.42
+        opts {:aim-pitch 0.31 :head-yaw -0.42 :grip 0.9 :expression 0.8
               :foot-offsets {:left 0.05 :right -0.03}
               :foot-orientation {:left [0.18 0.0] :right [0.0 -0.21]}}
         combat (character/combat-palette spec 0.25 0.8 opts)]
     (is (= combat (character/combat-palette spec 0.25 0.8 opts)))
-    (is (= 23 (count combat)))
+    (is (= 46 (count combat)))
     (is (every? #(= 16 (count %)) combat))
     (is (= (first walk) (first combat)) "root/entity motion ABI is unchanged")
     (is (not= (nth walk (character/joint-index :head))
@@ -95,7 +95,11 @@
                        (nth combat (character/joint-index %)))
                 [:upper-arm-left :lower-arm-left :hand-left
                  :upper-arm-right :lower-arm-right :hand-right :weapon
-                 :foot-left :foot-right]))))
+                 :foot-left :foot-right]))
+    (is (every? #(not= (nth walk (character/joint-index %))
+                       (nth combat (character/joint-index %)))
+                [:thumb-left-1 :index-left-2 :pinky-right-2
+                 :eye-left :eye-right :jaw]))))
 
 (deftest weapon-side-changes-readable-silhouette-metadata
   (let [right (character/rig-metadata spec)

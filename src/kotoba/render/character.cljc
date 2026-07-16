@@ -16,14 +16,26 @@
    :shoulder-right :upper-arm-right :lower-arm-right :hand-right
    :upper-leg-left :lower-leg-left :foot-left :toe-left
    :upper-leg-right :lower-leg-right :foot-right :toe-right
-   :weapon])
+   :weapon
+   :thumb-left-1 :thumb-left-2 :index-left-1 :index-left-2
+   :middle-left-1 :middle-left-2 :ring-left-1 :ring-left-2 :pinky-left-1 :pinky-left-2
+   :thumb-right-1 :thumb-right-2 :index-right-1 :index-right-2
+   :middle-right-1 :middle-right-2 :ring-right-1 :ring-right-2 :pinky-right-1 :pinky-right-2
+   :eye-left :eye-right :jaw])
 
 (def joint-index (zipmap joint-order (range)))
 
 (defn- vertex-influences [{:keys [width height depth]} [x y z]]
   (let [left? (neg? x)
         j #(get joint-index %)
-        pair (fn [a b t] [[(j a) (- 1.0 t)] [(j b) t]])]
+        pair (fn [a b t] [[(j a) (- 1.0 t)] [(j b) t]])
+        side-name (if left? "left" "right")
+        finger-name (cond (< z (* depth -0.08)) "thumb"
+                          (< z (* depth 0.02)) "index"
+                          (< z (* depth 0.12)) "middle"
+                          (< z (* depth 0.22)) "ring"
+                          :else "pinky")
+        finger-joint (fn [segment] (keyword (str finger-name "-" side-name "-" segment)))]
     (cond
       ;; rifle projects forward and is rigidly attached to the weapon socket.
       (> z (* depth 0.38)) [[(j :weapon) 1.0]]
@@ -31,8 +43,20 @@
                              [(j (if left? :toe-left :toe-right)) 0.28]]
       (< y (* height 0.28)) (pair (if left? :lower-leg-left :lower-leg-right)
                                    (if left? :upper-leg-left :upper-leg-right) 0.18)
-      (and (< y (* height 0.47)) (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.27)))
-      [[(j (if left? :hand-left :hand-right)) 1.0]]
+      ;; Facial geometry is genuinely palette-driven: eyes track independently
+      ;; and the lower face follows the jaw expression joint.
+      (and (> y (* height 0.875)) (> z (* depth 0.26)))
+      [[(j (if left? :eye-left :eye-right)) 1.0]]
+      (and (> y (* height 0.82)) (< y (* height 0.89)) (> z (* depth 0.18)))
+      [[(j :jaw) 1.0]]
+      ;; Five visible digits per hand use proximal/distal joints. This region is
+      ;; ahead of the glove but behind the weapon, so it cannot be mistaken for
+      ;; metadata-only rig expansion.
+      (and (< y (* height 0.47)) (> y (* height 0.34))
+           (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.42)))
+      (if (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.52))
+        (pair (finger-joint 1) (finger-joint 2) 0.72)
+        (pair (if left? :hand-left :hand-right) (finger-joint 1) 0.64))
       (< y (* height 0.47)) (pair (if left? :upper-leg-left :upper-leg-right) :hips 0.16)
       (and (< y (* height 0.67)) (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.27)))
       (pair (if left? :lower-arm-left :lower-arm-right)
@@ -117,7 +141,14 @@
      (m4-rotate-x-around (pivot 0.19 0.45) leg)
      (m4-rotate-x-around (pivot 0.19 0.25) (* leg -0.42))
      (m4-translate-y (:right foot-offsets)) (m4-translate-y (:right foot-offsets))
-     (m4-rotate-x-around (pivot 0.38 0.60) (* arm -0.18))])))
+     (m4-rotate-x-around (pivot 0.38 0.60) (* arm -0.18))
+     ;; Digit, eye and jaw extension joints default to their bind pose during
+     ;; locomotion; combat-palette supplies authored grip/expression motion.
+     identity-m4 identity-m4 identity-m4 identity-m4 identity-m4 identity-m4
+     identity-m4 identity-m4 identity-m4 identity-m4
+     identity-m4 identity-m4 identity-m4 identity-m4 identity-m4 identity-m4
+     identity-m4 identity-m4 identity-m4 identity-m4
+     identity-m4 identity-m4 identity-m4])))
 
 (defn combat-palette
   "Executable combat-pose palette layered on locomotion without changing the
@@ -126,13 +157,15 @@
    and authored terrain pitch/roll orient each foot. Angles are radians and are
    deliberately clamped to anatomical limits."
   [{:keys [width height] :as spec} phase amount
-   {:keys [foot-offsets foot-orientation aim-pitch head-yaw]
+   {:keys [foot-offsets foot-orientation aim-pitch head-yaw grip expression]
     :or {foot-offsets {:left 0.0 :right 0.0}
          foot-orientation {:left [0.0 0.0] :right [0.0 0.0]}
-         aim-pitch 0.0 head-yaw 0.0}}]
+         aim-pitch 0.0 head-yaw 0.0 grip 1.0 expression 0.0}}]
   (let [clamp (fn [lo hi x] (max lo (min hi (or x 0.0))))
         pitch (clamp -0.70 0.70 aim-pitch)
         look (clamp -0.85 0.85 head-yaw)
+        grip-angle (* 1.12 (clamp 0.0 1.0 grip))
+        expression-angle (* 0.18 (clamp 0.0 1.0 expression))
         orient (fn [side]
                  (let [[p r] (get foot-orientation side [0.0 0.0])]
                    [(clamp -0.50 0.50 p) (clamp -0.50 0.50 r)]))
@@ -152,6 +185,32 @@
                (joint-index :lower-arm-right) (m4-rotate-x-around (pivot 0.39 0.59) (+ -0.54 (* pitch 0.45)))
                (joint-index :hand-right) (m4-rotate-z-around (pivot 0.38 0.40) 0.18)
                (joint-index :weapon) (m4-rotate-x-around (pivot 0.38 0.60) pitch)
+               ;; Ten proximal and ten distal finger joints visibly wrap both
+               ;; hands around the trigger/foregrip. Eyes counter-rotate within
+               ;; an anatomical limit and jaw motion carries expression state.
+               (joint-index :thumb-left-1) (m4-rotate-x-around (pivot -0.47 0.40) (* grip-angle 0.65))
+               (joint-index :thumb-left-2) (m4-rotate-x-around (pivot -0.54 0.40) grip-angle)
+               (joint-index :index-left-1) (m4-rotate-x-around (pivot -0.47 0.40) (* grip-angle 0.72))
+               (joint-index :index-left-2) (m4-rotate-x-around (pivot -0.54 0.40) grip-angle)
+               (joint-index :middle-left-1) (m4-rotate-x-around (pivot -0.47 0.40) (* grip-angle 0.82))
+               (joint-index :middle-left-2) (m4-rotate-x-around (pivot -0.54 0.40) grip-angle)
+               (joint-index :ring-left-1) (m4-rotate-x-around (pivot -0.47 0.40) (* grip-angle 0.88))
+               (joint-index :ring-left-2) (m4-rotate-x-around (pivot -0.54 0.40) grip-angle)
+               (joint-index :pinky-left-1) (m4-rotate-x-around (pivot -0.47 0.40) grip-angle)
+               (joint-index :pinky-left-2) (m4-rotate-x-around (pivot -0.54 0.40) grip-angle)
+               (joint-index :thumb-right-1) (m4-rotate-x-around (pivot 0.47 0.40) (* grip-angle 0.65))
+               (joint-index :thumb-right-2) (m4-rotate-x-around (pivot 0.54 0.40) grip-angle)
+               (joint-index :index-right-1) (m4-rotate-x-around (pivot 0.47 0.40) (* grip-angle 0.42))
+               (joint-index :index-right-2) (m4-rotate-x-around (pivot 0.54 0.40) (* grip-angle 0.62))
+               (joint-index :middle-right-1) (m4-rotate-x-around (pivot 0.47 0.40) (* grip-angle 0.82))
+               (joint-index :middle-right-2) (m4-rotate-x-around (pivot 0.54 0.40) grip-angle)
+               (joint-index :ring-right-1) (m4-rotate-x-around (pivot 0.47 0.40) (* grip-angle 0.88))
+               (joint-index :ring-right-2) (m4-rotate-x-around (pivot 0.54 0.40) grip-angle)
+               (joint-index :pinky-right-1) (m4-rotate-x-around (pivot 0.47 0.40) grip-angle)
+               (joint-index :pinky-right-2) (m4-rotate-x-around (pivot 0.54 0.40) grip-angle)
+               (joint-index :eye-left) (m4-rotate-y-around (pivot -0.09 0.91) (* look 0.38))
+               (joint-index :eye-right) (m4-rotate-y-around (pivot 0.09 0.91) (* look 0.38))
+               (joint-index :jaw) (m4-rotate-x-around (pivot 0.0 0.85) expression-angle)
                ;; Foot pitch is the visible terrain alignment component. Roll is
                ;; retained in metadata/evidence until palette composition lands;
                ;; choosing the dominant angle avoids falsely composing matrices.
@@ -222,7 +281,18 @@
                :shoulder-right :chest :upper-arm-right :shoulder-right :lower-arm-right :upper-arm-right :hand-right :lower-arm-right
                :upper-leg-left :hips :lower-leg-left :upper-leg-left :foot-left :lower-leg-left :toe-left :foot-left
                :upper-leg-right :hips :lower-leg-right :upper-leg-right :foot-right :lower-leg-right :toe-right :foot-right
-               :weapon :hand-right}
+               :weapon :hand-right
+               :thumb-left-1 :hand-left :thumb-left-2 :thumb-left-1
+               :index-left-1 :hand-left :index-left-2 :index-left-1
+               :middle-left-1 :hand-left :middle-left-2 :middle-left-1
+               :ring-left-1 :hand-left :ring-left-2 :ring-left-1
+               :pinky-left-1 :hand-left :pinky-left-2 :pinky-left-1
+               :thumb-right-1 :hand-right :thumb-right-2 :thumb-right-1
+               :index-right-1 :hand-right :index-right-2 :index-right-1
+               :middle-right-1 :hand-right :middle-right-2 :middle-right-1
+               :ring-right-1 :hand-right :ring-right-2 :ring-right-1
+               :pinky-right-1 :hand-right :pinky-right-2 :pinky-right-1
+               :eye-left :head :eye-right :head :jaw :head}
      :root-motion :entity-transform
      :retarget-semantics :humanoid-v1
      :joints {:root [0.0 0.0 0.0]
@@ -247,7 +317,30 @@
               :lower-leg-right [(* width 0.19) (* height 0.22) 0.0]
               :foot-right [(* width 0.19) 0.0 0.0]
               :toe-right [(* width 0.19) 0.0 (* depth 0.22)]
-              :weapon [(* side width 0.50) (* height 0.58) (* depth 0.35)]}
+              :weapon [(* side width 0.50) (* height 0.58) (* depth 0.35)]
+              :thumb-left-1 [(* width -0.45) (* height 0.40) (* depth -0.08)]
+              :thumb-left-2 [(* width -0.54) (* height 0.40) (* depth -0.08)]
+              :index-left-1 [(* width -0.45) (* height 0.40) (* depth 0.02)]
+              :index-left-2 [(* width -0.54) (* height 0.40) (* depth 0.02)]
+              :middle-left-1 [(* width -0.45) (* height 0.40) (* depth 0.12)]
+              :middle-left-2 [(* width -0.54) (* height 0.40) (* depth 0.12)]
+              :ring-left-1 [(* width -0.45) (* height 0.40) (* depth 0.22)]
+              :ring-left-2 [(* width -0.54) (* height 0.40) (* depth 0.22)]
+              :pinky-left-1 [(* width -0.45) (* height 0.40) (* depth 0.31)]
+              :pinky-left-2 [(* width -0.54) (* height 0.40) (* depth 0.31)]
+              :thumb-right-1 [(* width 0.45) (* height 0.40) (* depth -0.08)]
+              :thumb-right-2 [(* width 0.54) (* height 0.40) (* depth -0.08)]
+              :index-right-1 [(* width 0.45) (* height 0.40) (* depth 0.02)]
+              :index-right-2 [(* width 0.54) (* height 0.40) (* depth 0.02)]
+              :middle-right-1 [(* width 0.45) (* height 0.40) (* depth 0.12)]
+              :middle-right-2 [(* width 0.54) (* height 0.40) (* depth 0.12)]
+              :ring-right-1 [(* width 0.45) (* height 0.40) (* depth 0.22)]
+              :ring-right-2 [(* width 0.54) (* height 0.40) (* depth 0.22)]
+              :pinky-right-1 [(* width 0.45) (* height 0.40) (* depth 0.31)]
+              :pinky-right-2 [(* width 0.54) (* height 0.40) (* depth 0.31)]
+              :eye-left [(* width -0.09) (* height 0.91) (* depth 0.34)]
+              :eye-right [(* width 0.09) (* height 0.91) (* depth 0.34)]
+              :jaw [0.0 (* height 0.85) (* depth 0.27)]}
      :sockets {:weapon-hand [(* side width 0.50) (* height 0.58) 0.0]
                :weapon-muzzle [(* side width 0.36) (* height 0.61) (* depth 0.72)]
                :back [0.0 (* height 0.70) (* depth -0.42)]}}))
@@ -330,8 +423,25 @@
                                  [(* xw 0.56) (* height 0.62) (* depth 1.04)])]
             [:weapon-accent (box [(* width 0.035) (* height 0.035) (* depth 0.36)]
                                  [(+ (* xw 0.42) (* side width 0.08))
-                                  (* height 0.62) (* depth 0.40)])]])]
-     (assemble (vec (concat body weapon detail-parts))))))
+                                  (* height 0.62) (* depth 0.40)])]])
+         expression-parts
+         (when high?
+           (vec
+            (concat
+             ;; Ten fingers, each split into two independently skinned visible
+             ;; phalanges. Their z spacing keeps the close-up silhouette readable.
+             (for [hand [-1.0 1.0] z [-0.08 0.02 0.12 0.22 0.31]
+                   segment [0 1]]
+               [:skin (box [(* width 0.105) (* height 0.038) (* depth 0.055)]
+                           [(* width hand (+ 0.46 (* segment 0.09)))
+                            (* height 0.40) (* depth z)])])
+             [[:eye (sphere [(* width 0.045) (* height 0.026) (* depth 0.025)]
+                            [(* width -0.09) (* height 0.91) (* depth 0.34)] 4 6)]
+              [:eye (sphere [(* width 0.045) (* height 0.026) (* depth 0.025)]
+                            [(* width 0.09) (* height 0.91) (* depth 0.34)] 4 6)]
+              [:skin (box [(* width 0.18) (* height 0.045) (* depth 0.035)]
+                          [0.0 (* height 0.85) (* depth 0.30)])]])))]
+     (assemble (vec (concat body weapon detail-parts expression-parts))))))
 
 (defn character-mesh
   "Return `[positions normals uvs indices]` for a grounded combat operator."
