@@ -28,9 +28,17 @@
            (set (keys (get-in registry [:operator-high :rig :sockets])))))
     (is (> (get-in registry [:operator-high :triangle-count])
            (get-in registry [:operator-low :triangle-count])))
-    (is (= {:min [-0.56 0.0 -0.42900000000000005]
-            :max [0.56 2.3310000000000004 0.7150000000000001]}
+    (is (= {:min [-0.64 0.0 -0.42900000000000005]
+            :max [0.64 2.3310000000000004 0.7150000000000001]}
            (:bounds (registry :operator-high))))))
+
+(deftest weapon-ready-pose-traverses-shoulder-to-muzzle
+  (let [high (character/character-assembly spec :high)
+        ranges (filter #(#{:weapon :weapon-accent} (:role %))
+                       (:material-ranges high))]
+    (is (= 8 (count ranges)))
+    (is (> (get-in (character/bounds spec) [:max 0]) 0.6)
+        "angled rifle expands the lateral silhouette beyond the shoulders")))
 
 (deftest high-lod-authors-readable-operator-and-rifle-detail
   (let [high (first (character/character-lods spec))

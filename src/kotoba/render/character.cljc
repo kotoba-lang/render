@@ -159,15 +159,15 @@
                [:armour (box [(* width 0.16) (* height 0.10) (* depth 0.22)]
                              [(* width 0.38) (* height 0.40) (* depth 0.05)])]]
          weapon [[:weapon (box [(* width 0.14) (* height 0.12) (* depth 0.35)]
-                               [(* xw 0.34) (* height 0.60) (* depth -0.30)])]
+                               [(* xw 0.27) (* height 0.60) (* depth -0.30)])]
                  [:weapon (box [(* width 0.18) (* height 0.14) (* depth 0.34)]
                                [(* xw 0.34) (* height 0.61) (* depth 0.03)])]
                  [:weapon (box [(* width 0.14) (* height 0.11) (* depth 0.42)]
-                               [(* xw 0.34) (* height 0.61) (* depth 0.40)])]
+                               [(* xw 0.42) (* height 0.61) (* depth 0.40)])]
                  [:weapon (box [(* width 0.065) (* height 0.065) (* depth 0.42)]
-                               [(* xw 0.34) (* height 0.62) (* depth 0.81)])]
+                               [(* xw 0.52) (* height 0.62) (* depth 0.81)])]
                  [:weapon-accent (box [(* width 0.12) (* height 0.20) (* depth 0.15)]
-                                      [(* xw 0.34) (* height 0.50) (* depth 0.08)])]]
+                                      [(* xw 0.35) (* height 0.50) (* depth 0.08)])]]
          detail-parts
          (when high?
            [[:armour (box [(* width 0.58) (* height 0.24) (* depth 0.64)]
@@ -189,11 +189,11 @@
                                  [(* width 0.17) (* height 0.67) (* depth -0.52)])]
             ;; rifle readability: raised optic, muzzle brake and side rail.
             [:weapon-accent (box [(* width 0.10) (* height 0.08) (* depth 0.15)]
-                                 [(* xw 0.34) (* height 0.72) (* depth 0.16)])]
+                                 [(* xw 0.37) (* height 0.72) (* depth 0.16)])]
             [:weapon-accent (box [(* width 0.11) (* height 0.09) (* depth 0.10)]
-                                 [(* xw 0.34) (* height 0.62) (* depth 1.04)])]
+                                 [(* xw 0.56) (* height 0.62) (* depth 1.04)])]
             [:weapon-accent (box [(* width 0.035) (* height 0.035) (* depth 0.36)]
-                                 [(+ (* xw 0.34) (* side width 0.08))
+                                 [(+ (* xw 0.42) (* side width 0.08))
                                   (* height 0.62) (* depth 0.40)])]])]
      (assemble (vec (concat body weapon detail-parts))))))
 
@@ -203,8 +203,8 @@
   ([spec detail] (:mesh (character-assembly spec detail))))
 
 (defn bounds [{:keys [width depth height]}]
-  {:min [(* width -0.56) 0.0 (* depth -0.66)]
-   :max [(* width 0.56) (* height 1.11) (* depth 1.10)]})
+  {:min [(* width -0.64) 0.0 (* depth -0.66)]
+   :max [(* width 0.64) (* height 1.11) (* depth 1.10)]})
 
 (defn character-lods [spec]
   (mapv (fn [[detail min-pixels]]
