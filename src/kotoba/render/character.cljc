@@ -7,25 +7,61 @@
 
 (def details #{:high :low})
 
-(def joint-order [:root :arm-left :arm-right :leg-left :leg-right])
+(def joint-order
+  "Retarget-compatible semantic palette order. Root is deliberately distinct
+   from hips: locomotion can move the entity transform without baking motion
+   into the skin palette."
+  [:root :hips :spine :chest :neck :head
+   :shoulder-left :upper-arm-left :lower-arm-left :hand-left
+   :shoulder-right :upper-arm-right :lower-arm-right :hand-right
+   :upper-leg-left :lower-leg-left :foot-left :toe-left
+   :upper-leg-right :lower-leg-right :foot-right :toe-right
+   :weapon])
 
-(defn- vertex-joint [{:keys [width height]} [x y _]]
-  (cond
-    (and (< y (* height 0.44)) (neg? x)) 3
-    (< y (* height 0.44)) 4
-    (and (< y (* height 0.78)) (< x (* width -0.27))) 1
-    (and (< y (* height 0.78)) (> x (* width 0.27))) 2
-    :else 0))
+(def joint-index (zipmap joint-order (range)))
+
+(defn- vertex-influences [{:keys [width height depth]} [x y z]]
+  (let [left? (neg? x)
+        j #(get joint-index %)
+        pair (fn [a b t] [[(j a) (- 1.0 t)] [(j b) t]])]
+    (cond
+      ;; rifle projects forward and is rigidly attached to the weapon socket.
+      (> z (* depth 0.38)) [[(j :weapon) 1.0]]
+      (< y (* height 0.10)) [[(j (if left? :foot-left :foot-right)) 0.72]
+                             [(j (if left? :toe-left :toe-right)) 0.28]]
+      (< y (* height 0.28)) (pair (if left? :lower-leg-left :lower-leg-right)
+                                   (if left? :upper-leg-left :upper-leg-right) 0.18)
+      (and (< y (* height 0.47)) (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.27)))
+      [[(j (if left? :hand-left :hand-right)) 1.0]]
+      (< y (* height 0.47)) (pair (if left? :upper-leg-left :upper-leg-right) :hips 0.16)
+      (and (< y (* height 0.67)) (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.27)))
+      (pair (if left? :lower-arm-left :lower-arm-right)
+            (if left? :upper-arm-left :upper-arm-right) 0.25)
+      (and (< y (* height 0.79)) (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.27)))
+      (pair (if left? :upper-arm-left :upper-arm-right)
+            (if left? :shoulder-left :shoulder-right) 0.20)
+      (< y (* height 0.55)) (pair :hips :spine 0.22)
+      (< y (* height 0.70)) (pair :spine :chest 0.35)
+      (< y (* height 0.82)) (pair :chest :neck 0.08)
+      (< y (* height 0.88)) (pair :neck :head 0.38)
+      :else [[(j :head) 1.0]])))
 
 (defn skinning-attributes
   "Four-lane glTF-compatible joint/weight streams for a generated operator mesh.
    The silhouette is segmented at anatomical part boundaries, so its one-hot
    weights deliberately produce rigid skinning."
   [spec positions]
-  (let [joints (mapv #(vector (vertex-joint spec %) 0 0 0) positions)]
-    {:joints joints
-     :weights (mapv (fn [_] [1.0 0.0 0.0 0.0]) joints)
+  (let [influences (mapv #(vertex-influences spec %) positions)
+        pad #(vec (take 4 (concat % (repeat [0 0.0]))))]
+    {:joints (mapv #(mapv first (pad %)) influences)
+     :weights (mapv #(mapv second (pad %)) influences)
      :joint-order joint-order}))
+
+(def ^:private identity-m4
+  [1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0])
+
+(defn- m4-translate-y [dy]
+  [1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 dy 0.0 1.0])
 
 (defn- m4-rotate-x-around [[_ py pz] angle]
   (let [c (#?(:clj Math/cos :cljs js/Math.cos) angle)
@@ -39,17 +75,31 @@
 (defn walk-palette
   "Ordered column-major skin matrices for `joint-order`. `phase` is cycles and
    `amount` is 0..1. Opposing arms and legs swing about authored pivots."
-  [{:keys [width height]} phase amount]
+  ([spec phase amount] (walk-palette spec phase amount {}))
+  ([{:keys [width height]} phase amount {:keys [foot-offsets]
+                                          :or {foot-offsets {:left 0.0 :right 0.0}}}]
   (let [pi #?(:clj Math/PI :cljs js/Math.PI)
         wave (* (#?(:clj Math/sin :cljs js/Math.sin) (* 2.0 pi phase))
                 (min 1.0 (max 0.0 amount)))
         arm (* 0.72 wave) leg (* 0.58 wave)
         pivot (fn [x y] [(* width x) (* height y) 0.0])]
-    [[1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0]
-     (m4-rotate-x-around (pivot -0.39 0.71) arm)
-     (m4-rotate-x-around (pivot 0.39 0.71) (- arm))
-     (m4-rotate-x-around (pivot -0.19 0.43) (- leg))
-     (m4-rotate-x-around (pivot 0.19 0.43) leg)]))
+    [identity-m4 identity-m4
+     (m4-rotate-x-around (pivot 0.0 0.55) (* wave 0.025))
+     (m4-rotate-x-around (pivot 0.0 0.69) (* wave -0.04))
+     identity-m4 identity-m4
+     identity-m4
+     (m4-rotate-x-around (pivot -0.39 0.73) arm)
+     (m4-rotate-x-around (pivot -0.39 0.59) (* arm 0.34)) identity-m4
+     identity-m4
+     (m4-rotate-x-around (pivot 0.39 0.73) (- arm))
+     (m4-rotate-x-around (pivot 0.39 0.59) (* arm -0.34)) identity-m4
+     (m4-rotate-x-around (pivot -0.19 0.45) (- leg))
+     (m4-rotate-x-around (pivot -0.19 0.25) (* leg 0.42))
+     (m4-translate-y (:left foot-offsets)) (m4-translate-y (:left foot-offsets))
+     (m4-rotate-x-around (pivot 0.19 0.45) leg)
+     (m4-rotate-x-around (pivot 0.19 0.25) (* leg -0.42))
+     (m4-translate-y (:right foot-offsets)) (m4-translate-y (:right foot-offsets))
+     (m4-rotate-x-around (pivot 0.38 0.60) (* arm -0.18))])))
 
 (defn- combine [meshes]
   (reduce (fn [[ps ns us is] [p n u idx]]
@@ -102,16 +152,39 @@
   "Stable normalized joints/sockets. Coordinates scale with the registered mesh."
   [{:keys [width depth height weapon-side] :or {weapon-side :right}}]
   (let [side (if (= weapon-side :left) -1.0 1.0)]
-    {:schema :kotoba.render/character-rig-v1
+    {:schema :kotoba.render/character-rig-v2
+     :joint-order joint-order
+     :parents {:root nil :hips :root :spine :hips :chest :spine :neck :chest :head :neck
+               :shoulder-left :chest :upper-arm-left :shoulder-left :lower-arm-left :upper-arm-left :hand-left :lower-arm-left
+               :shoulder-right :chest :upper-arm-right :shoulder-right :lower-arm-right :upper-arm-right :hand-right :lower-arm-right
+               :upper-leg-left :hips :lower-leg-left :upper-leg-left :foot-left :lower-leg-left :toe-left :foot-left
+               :upper-leg-right :hips :lower-leg-right :upper-leg-right :foot-right :lower-leg-right :toe-right :foot-right
+               :weapon :hand-right}
+     :root-motion :entity-transform
+     :retarget-semantics :humanoid-v1
      :joints {:root [0.0 0.0 0.0]
               :hips [0.0 (* height 0.47) 0.0]
-              :spine [0.0 (* height 0.66) 0.0]
+              :spine [0.0 (* height 0.60) 0.0]
+              :chest [0.0 (* height 0.72) 0.0]
               :neck [0.0 (* height 0.84) 0.0]
               :head [0.0 (* height 0.91) 0.0]
-              :hand-left [(* width -0.50) (* height 0.58) 0.0]
-              :hand-right [(* width 0.50) (* height 0.58) 0.0]
+              :shoulder-left [(* width -0.28) (* height 0.74) 0.0]
+              :upper-arm-left [(* width -0.38) (* height 0.68) 0.0]
+              :lower-arm-left [(* width -0.38) (* height 0.52) 0.0]
+              :hand-left [(* width -0.38) (* height 0.40) 0.0]
+              :shoulder-right [(* width 0.28) (* height 0.74) 0.0]
+              :upper-arm-right [(* width 0.38) (* height 0.68) 0.0]
+              :lower-arm-right [(* width 0.38) (* height 0.52) 0.0]
+              :hand-right [(* width 0.38) (* height 0.40) 0.0]
+              :upper-leg-left [(* width -0.19) (* height 0.43) 0.0]
+              :lower-leg-left [(* width -0.19) (* height 0.22) 0.0]
               :foot-left [(* width -0.19) 0.0 0.0]
-              :foot-right [(* width 0.19) 0.0 0.0]}
+              :toe-left [(* width -0.19) 0.0 (* depth 0.22)]
+              :upper-leg-right [(* width 0.19) (* height 0.43) 0.0]
+              :lower-leg-right [(* width 0.19) (* height 0.22) 0.0]
+              :foot-right [(* width 0.19) 0.0 0.0]
+              :toe-right [(* width 0.19) 0.0 (* depth 0.22)]
+              :weapon [(* side width 0.50) (* height 0.58) (* depth 0.35)]}
      :sockets {:weapon-hand [(* side width 0.50) (* height 0.58) 0.0]
                :weapon-muzzle [(* side width 0.36) (* height 0.61) (* depth 0.72)]
                :back [0.0 (* height 0.70) (* depth -0.42)]}}))

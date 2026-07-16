@@ -22,7 +22,7 @@
   (let [registry (character/webgpu-registration :operator spec)]
     (is (= #{:operator-high :operator-low} (set (keys registry))))
     (is (every? #(= :mesh (:type %)) (vals registry)))
-    (is (= :kotoba.render/character-rig-v1
+    (is (= :kotoba.render/character-rig-v2
            (get-in registry [:operator-high :rig :schema])))
     (is (= #{:weapon-hand :weapon-muzzle :back}
            (set (keys (get-in registry [:operator-high :rig :sockets])))))
@@ -63,8 +63,8 @@
                      [:operator-high :mesh])
         n (count (:positions mesh))]
     (is (= n (count (:joints mesh)) (count (:weights mesh))))
-    (is (= #{0 1 2 3 4} (set (map first (:joints mesh)))))
-    (is (every? #(= [1.0 0.0 0.0 0.0] %) (:weights mesh)))
+    (is (>= (count (set (mapcat identity (:joints mesh)))) 20))
+    (is (every? #(<= (Math/abs (- 1.0 (reduce + %))) 1.0e-9) (:weights mesh)))
     (is (every? #(every? (fn [j] (< -1 j (count character/joint-order))) %)
                 (:joints mesh)))))
 
@@ -75,7 +75,8 @@
     (is (= (count character/joint-order) (count moving)))
     (is (every? #(= 16 (count %)) moving))
     (is (= (first rest) (first moving)) "root remains identity")
-    (is (not= (nth rest 1) (nth moving 1)) "arm palette changes")
+    (is (= (nth rest 0) (nth moving 0)) "root motion stays outside the palette")
+    (is (not= (nth rest 7) (nth moving 7)) "arm palette changes")
     (is (not= (nth moving 1) (nth moving 2)) "opposing limbs counter-swing")))
 
 (deftest weapon-side-changes-readable-silhouette-metadata
