@@ -31,7 +31,7 @@
                (mapv #(+ (* -0.36 width) (* % x-step)) (range columns)))
         ys (if (= rows 1) [(* body-height 0.42)]
                (mapv #(+ (* body-height 0.22) (* % y-step)) (range rows)))
-        front-back (for [z [(- (/ depth 2.0) -0.035) (+ (/ depth 2.0) 0.035)]
+        front-back (for [z [(- (+ (/ depth 2.0) 0.035)) (+ (/ depth 2.0) 0.035)]
                          x xs y ys]
                      (part :window [x y z] [ww wh 0.07]))
         side-count (max 1 (dec columns))
@@ -40,7 +40,7 @@
                          (* % (/ (* depth 0.60) (dec side-count))))
                      (range side-count)))
         left-right (when sides
-                     (for [x [(- (/ width 2.0) -0.035) (+ (/ width 2.0) 0.035)]
+                     (for [x [(- (+ (/ width 2.0) 0.035)) (+ (/ width 2.0) 0.035)]
                            z zs y ys]
                        (part :window [x y z] [0.07 wh ww])))]
     (vec (concat front-back left-right))))

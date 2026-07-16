@@ -13,7 +13,12 @@
     (is (= {:draws 2 :triangles 24 :roles {:wall 1 :roof 1}}
            (architecture/budget low)))
     (is (some #(= :window (:role %)) high))
-    (is (some #(= :utility (:role %)) high))))
+    (is (some #(= :utility (:role %)) high))
+    (let [window-offsets (map :offset (filter #(= :window (:role %)) high))]
+      (is (some #(neg? (first %)) window-offsets) "left facade is populated")
+      (is (some #(pos? (first %)) window-offsets) "right facade is populated")
+      (is (some #(neg? (nth % 2)) window-offsets) "rear facade is populated")
+      (is (some #(pos? (nth % 2)) window-offsets) "front facade is populated"))))
 
 (deftest parts-are-portable-render-data
   (doseq [variant architecture/variants
