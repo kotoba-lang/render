@@ -30,10 +30,10 @@
         j #(get joint-index %)
         pair (fn [a b t] [[(j a) (- 1.0 t)] [(j b) t]])
         side-name (if left? "left" "right")
-        finger-name (cond (< z (* depth -0.08)) "thumb"
+        finger-name (cond (< z (* depth -0.02)) "thumb"
                           (< z (* depth 0.02)) "index"
-                          (< z (* depth 0.12)) "middle"
-                          (< z (* depth 0.22)) "ring"
+                          (< z (* depth 0.06)) "middle"
+                          (< z (* depth 0.10)) "ring"
                           :else "pinky")
         finger-joint (fn [segment] (keyword (str finger-name "-" side-name "-" segment)))]
     (cond
@@ -54,7 +54,7 @@
       ;; metadata-only rig expansion.
       (and (< y (* height 0.47)) (> y (* height 0.34))
            (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.42)))
-      (if (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.52))
+      (if (> (#?(:clj Math/abs :cljs js/Math.abs) x) (* width 0.475))
         (pair (finger-joint 1) (finger-joint 2) 0.72)
         (pair (if left? :hand-left :hand-right) (finger-joint 1) 0.64))
       (< y (* height 0.47)) (pair (if left? :upper-leg-left :upper-leg-right) :hips 0.16)
@@ -164,7 +164,10 @@
   (let [clamp (fn [lo hi x] (max lo (min hi (or x 0.0))))
         pitch (clamp -0.70 0.70 aim-pitch)
         look (clamp -0.85 0.85 head-yaw)
-        grip-angle (* 1.12 (clamp 0.0 1.0 grip))
+        ;; Skin matrices operate in mesh space, so a restrained curl preserves
+        ;; a readable five-digit silhouette instead of fanning thin phalanges
+        ;; through the foregrip at close-up distance.
+        grip-angle (* 0.28 (clamp 0.0 1.0 grip))
         expression-angle (* 0.18 (clamp 0.0 1.0 expression))
         orient (fn [side]
                  (let [[p r] (get foot-orientation side [0.0 0.0])]
@@ -430,10 +433,10 @@
             (concat
              ;; Ten fingers, each split into two independently skinned visible
              ;; phalanges. Their z spacing keeps the close-up silhouette readable.
-             (for [hand [-1.0 1.0] z [-0.08 0.02 0.12 0.22 0.31]
+             (for [hand [-1.0 1.0] z [-0.04 0.00 0.04 0.08 0.12]
                    segment [0 1]]
-               [:skin (box [(* width 0.105) (* height 0.038) (* depth 0.055)]
-                           [(* width hand (+ 0.46 (* segment 0.09)))
+               [:skin (box [(* width 0.060) (* height 0.032) (* depth 0.032)]
+                           [(* width hand (+ 0.445 (* segment 0.055)))
                             (* height 0.40) (* depth z)])])
              [[:eye (sphere [(* width 0.045) (* height 0.026) (* depth 0.025)]
                             [(* width -0.09) (* height 0.91) (* depth 0.34)] 4 6)]
