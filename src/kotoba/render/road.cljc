@@ -93,6 +93,18 @@
         scale (min miter-limit (/ 1.0 (max projection 1.0e-6)))]
     [lx lz scale]))
 
+(defn- triangle-normal-y [positions [ia ib ic]]
+  (let [[ax _ az] (nth positions ia)
+        [bx _ bz] (nth positions ib)
+        [cx _ cz] (nth positions ic)]
+    (- (* (- bz az) (- cx ax)) (* (- bx ax) (- cz az)))))
+
+(defn- face-up [positions [a b c :as triangle]]
+  (if (neg? (triangle-normal-y positions triangle)) [a c b] triangle))
+
+(defn- quad-indices [positions a b c d]
+  (vec (mapcat #(face-up positions %) [[a b c] [b d c]])))
+
 (defn road-mesh
   "Bake a continuous terrain-following ribbon as `[positions normals uvs indices]`.
 
@@ -131,7 +143,7 @@
                                (mapcat (fn [col]
                                          (let [a (+ (* row row-width) col) b (inc a)
                                                c (+ a row-width) d (inc c)]
-                                           [a c b b c d]))
+                                           (quad-indices positions3 a b c d)))
                                        (range (dec row-width))))
                              (range (dec (count rows)))))
          uvs (vec (mapcat (fn [v]
@@ -165,15 +177,16 @@
         uvs (vec (partition 2 uvs))
         rows (quot (count positions) row-width)
         selected (vec (for [row (range rows) col columns] (+ (* row row-width) col)))
+        selected-positions (mapv #(nth positions %) selected)
         strip-width (count columns)
         indices (vec (mapcat (fn [row]
                                (mapcat (fn [col]
                                          (let [a (+ (* row strip-width) col) b (inc a)
                                                c (+ a strip-width) d (inc c)]
-                                           [a c b b c d]))
+                                           (quad-indices selected-positions a b c d)))
                                        (range (dec strip-width))))
                              (range (dec rows))))]
-    [(vec (mapcat #(nth positions %) selected))
+    [(vec (mapcat identity selected-positions))
      (vec (mapcat #(nth normals %) selected))
      (vec (mapcat #(nth uvs %) selected))
      indices]))
@@ -236,7 +249,7 @@
         normals (vec (mapcat (fn [_] [0.0 1.0 0.0 0.0 1.0 0.0]) rows))
         indices (vec (mapcat (fn [row]
                                (let [a (* row 2) b (inc a) c (+ a 2) d (inc c)]
-                                 [a c b b c d]))
+                                 (quad-indices (vec (mapcat identity rows)) a b c d)))
                              (range (dec (count rows)))))]
     [positions normals uvs indices]))
 

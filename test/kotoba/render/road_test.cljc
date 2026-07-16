@@ -10,6 +10,13 @@
            :clearance 0.04 :uv-scale 5.0 :base-subdivisions 8 :miter-limit 1.75
            :terrain terrain})
 
+(defn geometric-normal-y [positions [ia ib ic]]
+  (let [vertices (vec (partition 3 positions))
+        [ax ay az] (nth vertices ia)
+        [bx by bz] (nth vertices ib)
+        [cx cy cz] (nth vertices ic)]
+    (- (* (- bz az) (- cx ax)) (* (- bx ax) (- cz az)))))
+
 (deftest terrain-following-ribbon-is-deterministic-and-indexed
   (doseq [detail road/details]
     (let [[positions normals uvs indices :as mesh] (road/road-mesh spec detail)
@@ -17,6 +24,9 @@
       (is (= mesh (road/road-mesh spec detail)))
       (is (= vertices (quot (count normals) 3) (quot (count uvs) 2)))
       (is (every? #(< -1 % vertices) indices))
+      (is (every? pos? (map #(geometric-normal-y positions %)
+                            (partition 3 indices)))
+          "top-facing road triangles survive the renderer's back-face culling")
       (is (every? number? positions)))))
 
 (deftest polyline-junction-is-one-shared-row-with-continuous-uv
@@ -98,6 +108,9 @@
       (is (= mesh (road/marking-mesh spec detail)))
       (is (= (count vertices) (quot (count normals) 3) (quot (count uvs) 2)))
       (is (every? #(< -1 % (count vertices)) indices))
+      (is (every? pos? (map #(geometric-normal-y positions %)
+                            (partition 3 indices)))
+          "top-facing paint triangles survive the renderer's back-face culling")
       (is (every? (fn [[x y z]]
                     (< (Math/abs (- y (+ (road/terrain-height terrain x z) expected-lift)))
                        1.0e-9))
