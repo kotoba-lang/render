@@ -6,7 +6,7 @@
    surfaces produce identical bytes without global RNG or floating point."
   (:require [kotoba.render.texture :as texture]))
 
-(def material-kinds #{:steel :masonry :ground})
+(def material-kinds #{:steel :masonry :ground :grass :soil :rock})
 
 (defn- i32 [n]
   #?(:clj (unchecked-int n)
@@ -85,6 +85,35 @@
      :normal (normal-pixel seed x y 24)
      :metallic-roughness [0 (vary 220 24 fine) 0 255]}))
 
+(defn- grass-pixel [seed scale x y]
+  (let [tuft (noise-byte seed (quot x scale) (quot y scale) 41)
+        blade (noise-byte seed x (quot y 2) 43)
+        vein? (zero? (mod (+ x (quot tuft 32)) (max 2 (quot scale 2))))]
+    {:albedo [(vary 42 16 tuft) (vary (if vein? 116 92) 30 blade)
+              (vary 38 18 tuft) 255]
+     :normal (normal-pixel seed x y (if vein? 38 27))
+     :metallic-roughness [0 (vary 222 22 blade) 0 255]}))
+
+(defn- soil-pixel [seed scale x y]
+  (let [clod (noise-byte seed (quot x scale) (quot y scale) 47)
+        grit (noise-byte seed x y 53)
+        pebble? (> grit 236)]
+    {:albedo (if pebble?
+               [(vary 112 18 clod) (vary 105 16 grit) (vary 91 14 clod) 255]
+               [(vary 104 30 clod) (vary 70 24 grit) (vary 43 18 clod) 255])
+     :normal (normal-pixel seed x y (if pebble? 44 31))
+     :metallic-roughness [0 (vary (if pebble? 190 230) 20 grit) 0 255]}))
+
+(defn- rock-pixel [seed scale x y]
+  (let [formation (noise-byte seed (quot x scale) (quot y scale) 59)
+        grain (noise-byte seed x y 61)
+        crack? (< (noise-byte seed x y 67) 18)
+        base (if crack? 48 (vary 132 38 formation))]
+    {:albedo [(vary base 18 grain) (vary (+ base 3) 16 grain)
+              (vary (+ base 7) 14 formation) 255]
+     :normal (if crack? [128 128 220 255] (normal-pixel seed x y 34))
+     :metallic-roughness [0 (if crack? 244 (vary 202 30 grain)) 2 255]}))
+
 (defn- validate-options! [{:keys [kind width height seed scale]}]
   (when-not (material-kinds kind)
     (throw (ex-info "unsupported procedural material kind"
@@ -100,7 +129,7 @@
 (defn bake-pbr-material
   "Bake a complete glTF metallic-roughness texture set.
 
-   `kind` is :steel, :masonry or :ground. `seed` and integer texel coordinates
+   `kind` is :steel, :masonry, :ground, :grass, :soil or :rock. `seed` and integer texel coordinates
    fully determine the bytes. `scale` controls feature size and defaults to 8.
    Albedo is sRGB; tangent normals and G-roughness/B-metallic data are linear."
   [{:keys [kind width height seed scale] :or {seed 0 scale 8} :as options}]
@@ -108,9 +137,17 @@
   (let [pixel-fn (case kind
                    :steel steel-pixel
                    :masonry masonry-pixel
-                   :ground ground-pixel)
+                   :ground ground-pixel
+                   :grass grass-pixel
+                   :soil soil-pixel
+                   :rock rock-pixel)
+        periodic-biome? (#{:grass :soil :rock} kind)
         pixels (for [y (range height) x (range width)]
-                 (pixel-fn seed scale x y))
+                 ;; Dedicated terrain layers repeat without a border seam: the
+                 ;; final row/column intentionally reproduce coordinate zero.
+                 (pixel-fn seed scale
+                           (if periodic-biome? (mod x (max 1 (dec width))) x)
+                           (if periodic-biome? (mod y (max 1 (dec height))) y)))
         channel (fn [k] (vec (mapcat k pixels)))]
     {:albedo (texture/rgba8 width height (channel :albedo) :srgb)
      :normal (texture/rgba8 width height (channel :normal) :linear)

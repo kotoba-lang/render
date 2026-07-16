@@ -10,7 +10,7 @@
                [[0 0 0 0] [1 0 0 0] [1 2 3 4] [2654435769 17 29 7]]))))
 
 (deftest bakes-complete-existing-rgba8-contract
-  (doseq [kind [:steel :masonry :ground]]
+  (doseq [kind [:steel :masonry :ground :grass :soil :rock]]
     (let [material (procedural/bake-pbr-material
                     {:kind kind :width 8 :height 4 :seed 42 :scale 4})]
       (is (= #{:albedo :normal :metallic-roughness} (set (keys material))))
@@ -60,6 +60,32 @@
            (mapv :width
                  (texture/generate-mipmaps-cpu
                   (get-in (first library) [:albedo :data]) 8 8 4))))))
+
+(deftest terrain-biome-materials-are-distinct-seamless-complete-pbr-layers
+  (let [materials (into {}
+                        (for [kind [:grass :soil :rock]]
+                          [kind (procedural/bake-pbr-material
+                                 {:kind kind :width 8 :height 8 :seed 4242 :scale 4})]))]
+    (is (= 3 (count (set (map #(get-in % [:albedo :data]) (vals materials))))))
+    (doseq [[_ material] materials
+            channel [:albedo :normal :metallic-roughness]
+            :let [pixels (vec (partition 4 (get-in material [channel :data])))] ]
+      (is (= (mapv #(nth pixels (* % 8)) (range 8))
+             (mapv #(nth pixels (+ 7 (* % 8))) (range 8))))
+      (is (= (subvec pixels 0 8) (subvec pixels 56 64))))))
+
+(deftest terrain-biome-materials-have-byte-exact-goldens
+  (let [golden {:grass [49 100 46 255, 49 100 46 255,
+                         49 100 46 255, 49 100 46 255]
+                :soil [119 74 52 255, 119 74 52 255,
+                       119 74 52 255, 119 74 52 255]
+                :rock [104 107 100 255, 104 107 100 255,
+                       104 107 100 255, 104 107 100 255]}]
+    (doseq [[kind expected] golden]
+      (is (= expected
+             (get-in (procedural/bake-pbr-material
+                      {:kind kind :width 2 :height 2 :seed 42 :scale 2})
+                     [:albedo :data]))))))
 
 (deftest rejects-ambiguous-procedural-input
   (doseq [options [{:kind :unknown :width 4 :height 4 :seed 1}
