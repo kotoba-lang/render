@@ -6,7 +6,8 @@
    surfaces produce identical bytes without global RNG or floating point."
   (:require [kotoba.render.texture :as texture]))
 
-(def material-kinds #{:steel :masonry :ground :grass :soil :rock :leaf-card :grass-blade})
+(def material-kinds #{:steel :masonry :ground :grass :soil :rock :leaf-card :grass-blade
+                      :decal-wear :decal-impact})
 
 (defn- i32 [n]
   #?(:clj (unchecked-int n)
@@ -136,6 +137,29 @@
      :normal (normal-pixel seed x y 18)
      :metallic-roughness [0 (vary 224 18 n) 0 255]}))
 
+(defn- decal-pixel [kind width height seed x y]
+  (let [u (- (/ (+ x 0.5) width) 0.5)
+        v (- (/ (+ y 0.5) height) 0.5)
+        radial #?(:clj (Math/sqrt (+ (* u u) (* v v)))
+                  :cljs (js/Math.sqrt (+ (* u u) (* v v))))
+        n (noise-byte seed x y 79)
+        impact? (= kind :decal-impact)
+        band? (< #?(:clj (Math/abs (Math/sin (* 42.0 v)))
+                    :cljs (js/Math.abs (js/Math.sin (* 42.0 v)))) 0.42)
+        angle #?(:clj (Math/atan2 v u) :cljs (js/Math.atan2 v u))
+        spoke? (< #?(:clj (Math/abs (Math/sin (* 7.0 angle)))
+                     :cljs (js/Math.abs (js/Math.sin (* 7.0 angle)))) 0.18)
+        shape (if impact?
+                (and (< radial (+ 0.43 (* 0.035 (/ (- n 128) 128.0))))
+                     (or (< radial 0.25) spoke? (> n 82)))
+                (and (< radial 0.46) band? (> n 44)))
+        alpha (if shape
+                (clamp-byte (int (* 255.0 (min 1.0 (* 10.0 (- 0.5 radial)))))) 0)
+        base (if impact? 45 62)]
+    {:albedo [(vary base 18 n) (vary (- base 8) 14 n) (vary (- base 13) 12 n) alpha]
+     :normal (normal-pixel seed x y (if impact? 42 25))
+     :metallic-roughness [0 (vary (if impact? 214 188) 24 n) 3 255]}))
+
 (defn- validate-options! [{:keys [kind width height seed scale]}]
   (when-not (material-kinds kind)
     (throw (ex-info "unsupported procedural material kind"
@@ -164,13 +188,17 @@
                    :soil soil-pixel
                    :rock rock-pixel
                    :leaf-card nil
-                   :grass-blade nil)
+                   :grass-blade nil
+                   :decal-wear nil
+                   :decal-impact nil)
         periodic-biome? (#{:grass :soil :rock} kind)
         pixels (for [y (range height) x (range width)]
                  ;; Dedicated terrain layers repeat without a border seam: the
                  ;; final row/column intentionally reproduce coordinate zero.
-                 (if (#{:leaf-card :grass-blade} kind)
-                   (foliage-pixel kind width height seed x y)
+                 (if (#{:leaf-card :grass-blade :decal-wear :decal-impact} kind)
+                   (if (#{:decal-wear :decal-impact} kind)
+                     (decal-pixel kind width height seed x y)
+                     (foliage-pixel kind width height seed x y))
                    (pixel-fn seed scale
                              (if periodic-biome? (mod x (max 1 (dec width))) x)
                              (if periodic-biome? (mod y (max 1 (dec height))) y))))

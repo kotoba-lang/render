@@ -87,6 +87,19 @@
                       {:kind kind :width 2 :height 2 :seed 42 :scale 2})
                      [:albedo :data]))))))
 
+(deftest decal-materials-have-real-alpha-coverage-and-distinct-pbr-detail
+  (let [wear (procedural/bake-pbr-material
+              {:kind :decal-wear :width 32 :height 32 :seed 9031 :scale 8})
+        impact (procedural/bake-pbr-material
+                {:kind :decal-impact :width 32 :height 32 :seed 44021 :scale 8})
+        alphas (fn [material] (mapv #(nth % 3) (partition 4 (get-in material [:albedo :data]))))]
+    (doseq [material [wear impact]]
+      (is (some zero? (alphas material)))
+      (is (some pos? (alphas material)))
+      (is (> (count (set (alphas material))) 2) "edge coverage is feathered, not binary rectangle"))
+    (is (not= (:albedo wear) (:albedo impact)))
+    (is (not= (:normal wear) (:normal impact)))))
+
 (deftest rejects-ambiguous-procedural-input
   (doseq [options [{:kind :unknown :width 4 :height 4 :seed 1}
                    {:kind :steel :width 0 :height 4 :seed 1}
