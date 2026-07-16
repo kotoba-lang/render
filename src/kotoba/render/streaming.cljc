@@ -16,9 +16,17 @@
     :prop       {:enter 118.0 :exit 142.0 :lod-hysteresis 7.0}
     :vegetation {:enter 96.0  :exit 118.0 :lod-hysteresis 6.0}}})
 
+(defn- stable-floor [v]
+  (let [nearest (#?(:clj Math/round :cljs js/Math.round) v)
+        snapped (if (< (#?(:clj Math/abs :cljs js/Math.abs) (- v nearest)) 1.0e-9)
+                  nearest v)]
+    (long (#?(:clj Math/floor :cljs js/Math.floor) snapped))))
+
 (defn camera-cell [{:keys [cell-size] :or {cell-size 64.0}} [x _ z]]
-  [(long (#?(:clj Math/floor :cljs js/Math.floor) (/ x cell-size)))
-   (long (#?(:clj Math/floor :cljs js/Math.floor) (/ z cell-size)))])
+  ;; Camera follow math commonly leaves ±1e-13 around an exact boundary. Snap
+  ;; only that numerical noise; intentional positions beyond 1e-9 keep normal
+  ;; half-open cell semantics.
+  [(stable-floor (/ x cell-size)) (stable-floor (/ z cell-size))])
 
 (defn- distance-xz [[ax _ az] [cx _ cz] radius]
   (max 0.0 (- (#?(:clj Math/sqrt :cljs js/Math.sqrt)
