@@ -293,3 +293,17 @@ from visual-only roof/window/trim/utility detail, while prototype entries retain
 actual building LOD meshes and `detail-kit-v1` parts. Instance, draw and triangle
 budgets are emitted with the result. Photoreal keeps the same top-level API but
 is honestly marked `:boundary-only` and `:unimplemented`.
+
+## Semantic facade articulation
+
+`kotoba.render.facade/facade-kit` converts settlement archetypes into semantic
+base, plinth, corner, floor-band, window bay/frame, recess, door, canopy,
+signage, parapet, vent and pipe parts. Depot, habitat, industrial, utility and
+landmark patterns have distinct bay/floor rhythms across hero, mid and
+background tiers. Every visual-only part uses a deterministic
+`material-preset-v1` role; window bays add seeded emissive variation. Rhythm
+evidence enforces a bounded blank-wall ratio, and the result includes actual box
+and cylinder mesh tuples, transforms and draw/triangle budgets.
+`for-settlement-instance` derives dimensions and archetype directly from a
+settlement collision shell. Photoreal returns the same boundary without claiming
+an implementation.
