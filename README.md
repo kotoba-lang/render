@@ -360,3 +360,10 @@ zones. Hero, mid and background tiers expose draw/triangle budgets. Evidence
 proves shells and landmarks are grounded, below a safe skyline height and framed
 with visible ground/junction context. Photoreal uses the same data boundary but
 remains explicitly `:unsupported-future`.
+
+`:safe-height` is an authoring constraint, not evidence-only metadata: generated
+building meshes, collision shells and facade dimensions reserve parapet headroom
+and are resolved below the cap. Evidence derives its shell and facade extents
+from that actual output. Each anchor zone also includes deterministic directly
+renderable descriptors—geometry tuple/reference, full material, transform and
+collision-none policy—for foreground props and vegetation.

@@ -51,3 +51,23 @@
     (is (= :unsupported-future (:quality-claim resolved)))
     (is (empty? (:buildings resolved)))
     (is (empty? (:mesh-library resolved)))))
+
+(deftest safe-height-resolves-actual-shell-mesh-and-facade-output
+  (let [resolved (neighborhood/neighborhood (assoc base :tier :hero :safe-height 9.0))]
+    (is (every? #(<= (get-in % [:shell :collision :size 1]) 9.0) (:buildings resolved)))
+    (is (every? #(<= % 9.0) (get-in resolved [:evidence :resolved-facade-extents])))
+    (is (every? #(<= (get-in % [:shell :mesh-lods 0 :bounds :height]) 9.0)
+                (:buildings resolved)))
+    (is (true? (get-in resolved [:evidence :skyline-within-safe-height?])))
+    (is (true? (get-in resolved [:evidence :no-clipped-landmark?])))))
+
+(deftest anchor-zones-carry-directly-renderable-authored-descriptors
+  (let [zones (:anchor-zones (neighborhood/neighborhood base))
+        descriptors (mapcat :descriptors zones)]
+    (is (= 3 (count descriptors)))
+    (is (every? #(seq (get-in % [:geometry :mesh])) descriptors))
+    (is (every? #(map? (:material %)) descriptors))
+    (is (every? #(= 3 (count (get-in % [:transform :offset]))) descriptors))
+    (is (every? #(= {:mode :none :visual-only? true} (:collision %)) descriptors))
+    (is (= descriptors
+           (mapcat :descriptors (:anchor-zones (neighborhood/neighborhood base)))))))

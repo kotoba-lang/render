@@ -3,7 +3,9 @@
   (:require [kotoba.render.building :as building]
             [kotoba.render.facade :as facade]
             [kotoba.render.mesh :as mesh]
-            [kotoba.render.road :as road]))
+            [kotoba.render.procedural :as procedural]
+            [kotoba.render.road :as road]
+            [kotoba.render.vegetation :as vegetation]))
 
 (def schema :kotoba.render/neighborhood-composition-v2)
 (def families #{:stylized :photoreal})
@@ -86,55 +88,95 @@
                   :triangles 12})]
     (vec strips)))
 
-(defn- building-instance [family tier seed index position]
+(defn- building-instance [family tier seed safe-height index position]
   (let [archetype (nth archetype-cycle index)
-        spec (assoc (building-profile archetype) :seed (+ seed index))
         profile (building-profile archetype)
+        ;; Facade parapets/vents can extend above the shell authoring height.
+        ;; Reserve 8% headroom so actual visual extents obey the same safe cap.
+        resolved-height (min (:height profile) (/ safe-height 1.08))
+        spec (assoc profile :height resolved-height :seed (+ seed index))
         facade-kit (facade/facade-kit {:family family :tier tier :archetype archetype
                                        :entity-id (keyword (str "junction-building-" index))
                                        :seed (+ seed index) :width (:width profile)
-                                       :depth (:depth profile) :height (:height profile)})]
+                                       :depth (:depth profile) :height resolved-height})]
     {:instance/id (keyword (str "junction-building-" index))
      :archetype archetype :position [(first position) 0.0 (second position)]
      :grounded-y 0.0
      :shell {:collision {:mode :shell :shape :box
-                         :size [(:width profile) (:height profile) (:depth profile)]}
+                         :size [(:width profile) resolved-height (:depth profile)]}
              :mesh-lods (building/building-lods spec)}
      :facade (assoc facade-kit :visual-only? true)}))
 
-(defn- building-instances [family junction tier seed road-width sidewalk-width]
+(defn- building-instances [family junction tier seed safe-height road-width sidewalk-width]
   (let [count (get-in tier-policy [tier :building-count])
         d (+ (/ road-width 2.0) sidewalk-width 8.0)
         slots [[(- d) (- d)] [d (- d)] [d d] [(- d) d]]
         ;; The missing south arm of a T junction gets a foreground building,
         ;; not a road-clipped shell.
         slots (if (= junction :t) (vec (cons [0.0 (- d)] slots)) slots)]
-    (mapv #(building-instance family tier seed %1 %2) (range count) slots)))
+    (mapv #(building-instance family tier seed safe-height %1 %2) (range count) slots)))
 
-(defn- anchor-zones [road-width sidewalk-width]
-  (let [d (+ (/ road-width 2.0) sidewalk-width)]
+(defn- seeded-jitter [seed salt extent]
+  (* extent (- (/ (double (bit-and (procedural/coordinate-hash seed salt 5 239) 65535))
+                    65535.0) 0.5)))
+
+(defn- prop-descriptor [id semantic geometry material transform]
+  {:descriptor/id id :semantic semantic :geometry geometry
+   :material material :transform transform
+   :collision {:mode :none :visual-only? true}})
+
+(defn- anchor-zones [seed road-width sidewalk-width]
+  (let [d (+ (/ road-width 2.0) sidewalk-width)
+        cube {:geometry-ref :cube :mesh (mesh/cube)}
+        shrub-spec {:variant :shrub :width 2.2 :depth 1.9 :height 1.5 :seed seed}
+        shrub {:geometry-ref :kotoba.render.vegetation/vegetation-mesh
+               :mesh (vegetation/vegetation-mesh shrub-spec :low)}]
     [{:zone/id :foreground-left :kind :foreground-props
       :bounds {:center [(- d) 0.0 (- d)] :size [5.0 0.0 4.0]}
-      :collision {:mode :none :visual-only? true}}
+      :collision {:mode :none :visual-only? true}
+      :descriptors
+      [(prop-descriptor :foreground-crate :crate cube (:curb material-palette)
+                        {:offset [(+ (- d) (seeded-jitter seed 1 0.8)) 0.0 (- d)]
+                         :scale [0.9 0.8 0.9] :rotation [0.0 (seeded-jitter seed 2 0.4) 0.0]})]}
      {:zone/id :foreground-right :kind :foreground-props
       :bounds {:center [d 0.0 (- d)] :size [5.0 0.0 4.0]}
-      :collision {:mode :none :visual-only? true}}
+      :collision {:mode :none :visual-only? true}
+      :descriptors
+      [(prop-descriptor :junction-bollard :bollard cube (:marking material-palette)
+                        {:offset [(+ d (seeded-jitter seed 3 0.7)) 0.0 (- d)]
+                         :scale [0.24 0.85 0.24] :rotation [0.0 0.0 0.0]})]}
      {:zone/id :verge-vegetation :kind :vegetation-cluster
       :bounds {:center [d 0.0 d] :size [7.0 0.0 7.0]}
-      :collision {:mode :none :visual-only? true}}]))
+      :collision {:mode :none :visual-only? true}
+      :descriptors
+      [(prop-descriptor :junction-shrub :shrub shrub (:verge material-palette)
+                        {:offset [d 0.0 (+ d (seeded-jitter seed 4 1.2))]
+                         :scale [1.0 1.0 1.0] :rotation [0.0 (seeded-jitter seed 5 1.0) 0.0]})]}]))
+
+(defn- facade-max-y [building]
+  (reduce max 0.0
+          (for [part (get-in building [:facade :parts])
+                :let [[_ y _] (get-in part [:transform :offset])
+                      [_ h _] (get-in part [:transform :scale])]]
+            (+ y h))))
 
 (defn- evidence [buildings safe-height]
-  (let [heights (mapv #(get-in % [:shell :collision :size 1]) buildings)
+  (let [shell-heights (mapv #(get-in % [:shell :collision :size 1]) buildings)
+        facade-heights (mapv facade-max-y buildings)
+        actual-heights (mapv max shell-heights facade-heights)
         landmarks (filter #(= :landmark (:archetype %)) buildings)]
     {:schema :kotoba.render/neighborhood-evidence-v2
      :grounded-building-count (count (filter #(zero? (:grounded-y %)) buildings))
      :building-count (count buildings)
      :all-shells-grounded? (every? #(zero? (:grounded-y %)) buildings)
-     :safe-height safe-height :max-building-height (reduce max 0.0 heights)
-     :skyline-within-safe-height? (every? #(<= % safe-height) heights)
+     :safe-height safe-height :resolved-shell-heights shell-heights
+     :resolved-facade-extents facade-heights
+     :max-building-height (reduce max 0.0 actual-heights)
+     :skyline-within-safe-height? (every? #(<= % safe-height) actual-heights)
      :landmark-count (count landmarks)
      :no-floating-landmark? (every? #(zero? (:grounded-y %)) landmarks)
-     :no-clipped-landmark? (every? #(<= (get-in % [:shell :collision :size 1]) safe-height)
+     :no-clipped-landmark? (every? #(<= (max (get-in % [:shell :collision :size 1])
+                                                (facade-max-y %)) safe-height)
                                    landmarks)
      :framing {:requires-ground? true :junction-context-required? true
                :safe-look-height (* safe-height 0.42)
@@ -174,13 +216,13 @@
      :evidence {:status :not-authored} :budget {:within-budget? true}}
     (let [roads (road-library junction tier road-width extent terrain seed)
           street (streetscape road-width sidewalk-width extent)
-          buildings (building-instances family junction tier seed road-width sidewalk-width)]
+          buildings (building-instances family junction tier seed safe-height road-width sidewalk-width)]
       {:schema schema :family family :junction junction :tier tier :entity-id entity-id
        :implementation-status :implemented :quality-claim :stylized-authored
        :mesh-library {:cube {:mesh (mesh/cube) :source :kotoba.render.mesh/cube}
                       :roads roads}
        :streetscape street :buildings buildings
-       :anchor-zones (anchor-zones road-width sidewalk-width)
+       :anchor-zones (anchor-zones seed road-width sidewalk-width)
        :evidence (evidence buildings safe-height)
        :budget (budget roads street buildings tier)})))
 
