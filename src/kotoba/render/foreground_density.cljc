@@ -1,0 +1,174 @@
+(ns kotoba.render.foreground-density
+  "Authored foreground/midground density and material layering descriptors."
+  (:require [kotoba.render.mesh :as mesh]
+            [kotoba.render.procedural :as procedural]
+            [kotoba.render.vegetation :as vegetation]))
+
+(def schema :kotoba.render/foreground-density-v1)
+(def families #{:stylized :photoreal})
+(def tiers #{:hero :mid :background})
+(def material-contract :kotoba.render/material-preset-v1)
+
+(def tier-policy
+  {:hero {:instance-budget 30 :draw-budget 42 :triangle-budget 3200
+          :foreground-count 18 :midground-count 12}
+   :mid {:instance-budget 18 :draw-budget 28 :triangle-budget 1800
+         :foreground-count 10 :midground-count 8}
+   :background {:instance-budget 8 :draw-budget 16 :triangle-budget 720
+                :foreground-count 3 :midground-count 5}})
+
+(def kinds [:shrub :grass :crate :bollard :rock :debris])
+
+(def ^:private kind-profile
+  {:shrub {:size [2.2 1.5 1.9] :role :foliage}
+   :grass {:size [1.1 0.72 0.9] :role :grass}
+   :crate {:size [0.85 0.78 0.85] :role :utility}
+   :bollard {:size [0.24 0.86 0.24] :role :utility}
+   :rock {:size [0.95 0.62 0.78] :role :trunk}
+   :debris {:size [0.62 0.16 0.34] :role :utility}})
+
+(def material-records
+  {:foliage {:base-color [0.16 0.42 0.20 1.0] :metallic 0.0 :roughness 0.88}
+   :grass {:base-color [0.22 0.48 0.16 1.0] :metallic 0.0 :roughness 0.92}
+   :trunk {:base-color [0.25 0.17 0.10 1.0] :metallic 0.0 :roughness 0.95}
+   :utility {:base-color [0.20 0.23 0.27 1.0] :metallic 0.46 :roughness 0.48}
+   :road-edge-wear {:base-color [0.22 0.20 0.17 0.72] :metallic 0.0 :roughness 0.97}
+   :road-patch {:base-color [0.045 0.05 0.06 0.92] :metallic 0.0 :roughness 0.94}
+   :road-decal {:base-color [0.72 0.58 0.24 0.78] :metallic 0.0 :roughness 0.78}
+   :facade-base {:base-color [0.34 0.27 0.22 1.0] :metallic 0.02 :roughness 0.88}
+   :facade-trim {:base-color [0.52 0.38 0.21 1.0] :metallic 0.16 :roughness 0.58}
+   :facade-window {:base-color [0.045 0.38 0.54 1.0] :metallic 0.10 :roughness 0.18
+                   :emissive [0.01 0.18 0.30] :emissive-strength 0.54}})
+
+(defn- unit [seed salt]
+  (/ (double (bit-and (procedural/coordinate-hash seed salt 23 251) 65535)) 65535.0))
+
+(defn- bounds [positions]
+  (let [p3 (partition 3 positions)]
+    {:min (mapv #(apply min (map (fn [p] (nth p %)) p3)) (range 3))
+     :max (mapv #(apply max (map (fn [p] (nth p %)) p3)) (range 3))}))
+
+(defn normalize-mesh
+  "Normalize any mesh tuple to X/Z [-.5,.5], grounded Y [0,1]. The transform
+   is then the sole world-size owner, preventing authored-size double scaling."
+  [[positions normals uvs indices]]
+  (let [{[min-x min-y min-z] :min [max-x max-y max-z] :max} (bounds positions)
+        extents [(max 1.0e-9 (- max-x min-x)) (max 1.0e-9 (- max-y min-y))
+                 (max 1.0e-9 (- max-z min-z))]
+        [ex ey ez] extents
+        cx (/ (+ min-x max-x) 2.0) cz (/ (+ min-z max-z) 2.0)
+        normalized (vec (mapcat (fn [[x y z]]
+                                  [(/ (- x cx) ex) (/ (- y min-y) ey) (/ (- z cz) ez)])
+                                (partition 3 positions)))]
+    {:mesh [normalized normals uvs indices]
+     :geometry-space :normalized-unit
+     :normalized-bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
+     :source-bounds {:min [min-x min-y min-z] :max [max-x max-y max-z]}}))
+
+(defn- source-mesh [kind seed]
+  (case kind
+    :shrub (vegetation/vegetation-mesh
+            {:variant :shrub :width 2.2 :depth 1.9 :height 1.5 :seed seed} :low)
+    :grass (vegetation/vegetation-mesh
+            {:variant :grass-tuft :width 1.1 :depth 0.9 :height 0.72 :seed seed} :low)
+    :bollard (mesh/cylinder-pipe 0.5 0.0 1.0 8)
+    :rock (mesh/sphere 4 7)
+    (mesh/cube)))
+
+(defn- material-ref [family role entity-id]
+  (let [preset-role (case role :foliage :foliage :grass :grass :trunk :trunk
+                          :facade-trim :trim :facade-window :window
+                          :facade-base :wall :utility)]
+    {:contract material-contract :family family
+     :preset-id (keyword (name family)
+                         (str (if (#{:foliage :grass :trunk} preset-role)
+                                "vegetation-" "architecture-")
+                              (name preset-role)))
+     :domain (if (#{:foliage :grass :trunk} preset-role) :vegetation :architecture)
+     :role preset-role :entity-id entity-id}))
+
+(defn- geometry-library [seed]
+  (into {} (map-indexed (fn [index kind]
+                          [kind (normalize-mesh (source-mesh kind (+ seed index)))])
+                        kinds)))
+
+(defn- descriptor [family seed index zone origin radius ground-y]
+  (let [kind (nth kinds (mod (+ index (bit-and seed 5)) (count kinds)))
+        role (:role (kind-profile kind))
+        angle (* 6.283185307179586 (unit seed (+ 100 index)))
+        r (* radius (+ 0.18 (* 0.78 (unit seed (+ 200 index)))))
+        cos #?(:clj Math/cos :cljs js/Math.cos) sin #?(:clj Math/sin :cljs js/Math.sin)
+        [ox _ oz] origin
+        scale-factor (+ 0.86 (* 0.28 (unit seed (+ 300 index))))
+        size (mapv #(* % scale-factor) (:size (kind-profile kind)))]
+    {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
+     :camera-zone zone :kind kind :geometry-ref kind
+     :geometry-space :normalized-unit
+     :material-role role :material (material-records role)
+     :material-ref (material-ref family role (str (name zone) "/" index))
+     :transform {:offset [(+ ox (* r (cos angle))) ground-y (+ oz (* r (sin angle)))]
+                 :scale size :scale-mode :world-size
+                 :rotation [0.0 (* 6.283185307179586 (unit seed (+ 400 index))) 0.0]
+                 :grounded? true}
+     :collision {:mode :none :visual-only? true}}))
+
+(defn- layer-descriptor [family index role offset scale geometry-ref clearance]
+  {:descriptor/id (keyword (str "material-layer-" index))
+   :camera-zone :foreground :kind :material-layer
+   :geometry-ref geometry-ref :geometry-space :normalized-unit
+   :material-role role :material (material-records role)
+   :material-ref (material-ref family role (str "layer/" index))
+   :transform {:offset (update offset 1 + clearance) :scale scale
+               :scale-mode :world-size :rotation [0.0 0.0 0.0] :grounded? true}
+   :collision {:mode :none :visual-only? true}
+   :layering {:projection (if (#{:road-edge-wear :road-patch :road-decal} role)
+                            :ground :facade)
+              :depth-bias clearance :alpha-mode :blend}})
+
+(defn- material-layers [family origin ground-y]
+  (let [[x _ z] origin]
+    [(layer-descriptor family 0 :road-edge-wear [(- x 3.2) ground-y z] [5.2 0.01 0.72] :crate 0.012)
+     (layer-descriptor family 1 :road-patch [(+ x 2.1) ground-y (+ z 1.4)] [2.4 0.01 1.6] :crate 0.014)
+     (layer-descriptor family 2 :road-decal [x ground-y (- z 2.2)] [3.0 0.01 0.32] :crate 0.016)
+     (layer-descriptor family 3 :facade-base [(- x 5.0) ground-y (+ z 5.0)] [4.0 2.2 0.10] :crate 0.0)
+     (layer-descriptor family 4 :facade-trim [(- x 5.0) (+ ground-y 1.7) (+ z 5.08)] [4.2 0.20 0.08] :crate 0.0)
+     (layer-descriptor family 5 :facade-window [(- x 5.0) (+ ground-y 0.72) (+ z 5.13)] [1.3 0.82 0.05] :crate 0.0)]))
+
+(defn- budget [descriptors layers library tier]
+  (let [triangles (+ (reduce + 0 (map #(quot (count (nth (get-in library [(:geometry-ref %) :mesh]) 3)) 3)
+                                      descriptors))
+                     (* 12 (count layers)))
+        draws (+ (count descriptors) (count layers)) policy (tier-policy tier)]
+    {:instances (count descriptors) :instance-budget (:instance-budget policy)
+     :draws draws :draw-budget (:draw-budget policy)
+     :triangles triangles :triangle-budget (:triangle-budget policy)
+     :within-budget? (and (<= (count descriptors) (:instance-budget policy))
+                          (<= draws (:draw-budget policy))
+                          (<= triangles (:triangle-budget policy)))}))
+
+(defn foreground-kit
+  [{:keys [family tier entity-id seed origin radius ground-y]
+    :or {family :stylized tier :mid entity-id :foreground seed 0
+         origin [0.0 0.0 0.0] radius 10.0 ground-y 0.0}}]
+  (when-not (families family) (throw (ex-info "unsupported foreground family" {:family family})))
+  (when-not (tiers tier) (throw (ex-info "unsupported foreground tier" {:tier tier})))
+  (if (= family :photoreal)
+    {:schema schema :family family :tier tier :entity-id entity-id
+     :implementation-status :boundary-only :quality-claim :unsupported-future
+     :geometry-library {} :camera-zones {} :material-layers [] :budget {:within-budget? true}}
+    (let [policy (tier-policy tier) library (geometry-library seed)
+          foreground (mapv #(descriptor family seed % :foreground origin (* radius 0.62) ground-y)
+                           (range (:foreground-count policy)))
+          midground (mapv #(descriptor family seed (+ 100 %) :midground origin radius ground-y)
+                          (range (:midground-count policy)))
+          all (vec (concat foreground midground)) layers (material-layers family origin ground-y)]
+      {:schema schema :family family :tier tier :entity-id entity-id
+       :implementation-status :implemented :quality-claim :stylized-authored
+       :geometry-contract {:space :normalized-unit :bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
+                           :transform-scale-mode :world-size :double-scale-forbidden? true}
+       :geometry-library library
+       :camera-zones {:foreground foreground :midground midground}
+       :material-layers layers :budget (budget all layers library tier)})))
+
+(defn foreground-lods [spec]
+  (mapv #(foreground-kit (assoc spec :tier %)) [:hero :mid :background]))
