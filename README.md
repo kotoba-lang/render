@@ -382,7 +382,9 @@ Photoreal retains the boundary as explicit future work.
 
 Each density descriptor also carries a deterministic balanced
 `:composition-region` (`:foreground-left`, `:foreground-right`,
-`:midground-left`, or `:midground-right`). Material layers count toward the same
-actual instance budget. Road layers attach in `:neighborhood-world` space;
+`:midground-left`, or `:midground-right`) and matching projection intent as
+`:screen-side` (`:left` or `:right`). The renderer is responsible for validating
+that intent against actual camera projection. Material layers count toward the
+same actual instance budget. Road layers attach in `:neighborhood-world` space;
 facade base/trim/window transforms attach to explicit `:building-facade`
 anchors in `:facade-local` space and must be composed with a building transform.

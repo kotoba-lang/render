@@ -101,9 +101,11 @@
         [ox _ oz] origin
         scale-factor (+ 0.86 (* 0.28 (unit seed (+ 300 index))))
         size (mapv #(* % scale-factor) (:size (kind-profile kind)))
-        region (keyword (str (name zone) "-" (if (even? index) "left" "right")))]
+        screen-side (if (even? index) :left :right)
+        region (keyword (str (name zone) "-" (name screen-side)))]
     {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
-     :camera-zone zone :composition-region region :kind kind :geometry-ref kind
+     :camera-zone zone :composition-region region :screen-side screen-side
+     :kind kind :geometry-ref kind
      :geometry-space :normalized-unit
      :material-role role :material (material-records role)
      :material-ref (material-ref family role (str (name zone) "/" index))

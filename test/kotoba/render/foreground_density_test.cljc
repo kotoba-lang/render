@@ -51,6 +51,10 @@
     (is (pos? left))
     (is (pos? right))
     (is (<= (#?(:clj Math/abs :cljs js/Math.abs) (- left right)) 1))
+    (is (every? (fn [{:keys [composition-region screen-side]}]
+                  (= composition-region
+                     (keyword (str (name zone) "-" (name screen-side)))))
+                descriptors))
     (is (every? #(zero? (get-in % [:transform :offset 1])) descriptors))))
 
 (deftest layering-is-renderer-consumable-not-metadata-only
