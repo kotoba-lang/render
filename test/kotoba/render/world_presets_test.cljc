@@ -18,7 +18,9 @@
     (is (= a b))
     (is (not= (get-in a [:material :base-color]) (get-in c [:material :base-color])))
     (is (= :entity-id (get-in a [:variation :seed-source])))
-    (is (integer? (get-in a [:variation :resolved-seed])))))
+    (is (integer? (get-in a [:variation :resolved-seed])))
+    (is (= 8670226 (get-in a [:variation :resolved-seed]))
+        "cross-interpreter 24-bit golden")))
 
 (deftest stylized-and-photoreal-share-the-envelope-not-the-shader-model
   (doseq [domain [:vegetation :architecture]

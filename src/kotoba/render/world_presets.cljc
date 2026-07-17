@@ -88,12 +88,17 @@
              :variation {:base-color-jitter 0.05 :roughness-jitter 0.04}}})
 
 (defn- stable-seed [x]
-  (reduce (fn [h c]
-            (bit-and 0xffffffff (* 16777619 (bit-xor h (int c)))))
-          2166136261 (str x)))
+  (let [s (str x)
+        code-units #?(:clj (map int s)
+                      :cljs (map #(.charCodeAt s %) (range (count s))))]
+    (reduce (fn [h code-unit]
+            ;; A 24-bit lane keeps every multiply below IEEE-754's exact integer
+            ;; ceiling, making CLJ longs and CLJS numbers byte-identical.
+              (bit-and 0xffffff (* 16777619 (bit-xor h code-unit))))
+            (bit-and 0xffffff 2166136261) code-units)))
 
 (defn- unit-signed [seed salt]
-  (let [x (bit-and 0xffffffff (+ (* 1664525 (bit-xor seed salt)) 1013904223))]
+  (let [x (bit-and 0xffffff (+ (* 1664525 (bit-xor seed salt)) 1013904223))]
     (- (* 2.0 (/ (double (bit-and x 0xffff)) 65535.0)) 1.0)))
 
 (defn- clamp [x lo hi] (max lo (min hi x)))
