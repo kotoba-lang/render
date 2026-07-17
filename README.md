@@ -319,3 +319,16 @@ mid characters use one lower-resolution ellipse; far contact geometry is
 removed. Evidence reports contact counts, opacity, clearance and shadow-to-body
 ratios, including explicit no-floating/no-oversized checks. The photoreal family
 uses the same API boundary but is marked `:unsupported-future`.
+
+## Stylized material readability profiles
+
+`kotoba.render.material-readability/material-profile` resolves actual portable
+PBR plus toon records for skin, cloth, metal, visor and team accent. Records
+retain the existing `kotoba.render.material` core while adding shade colour,
+toon bands, rim and specular controls that executors may lower progressively.
+Near/mid/far distance profiles reduce band/specular complexity without merging
+semantic values. Evidence measures role luminance gaps, portable validity and
+team contrast; blue/orange/neutral identity is redundantly encoded through hue,
+value, emissive and distinct patterns for colour-blind readability.
+`character-palette` maps existing fabric/armour/weapon/visor/accent mesh ranges
+directly to these material records. Photoreal remains explicitly future work.
