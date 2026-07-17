@@ -256,3 +256,15 @@ families keep the same domain/role, outline, variation and LOD boundary;
 Palette jitter is deterministic from `:entity-id`, never frame state or platform
 hashing. `resolution-evidence` reports selected IDs/roles without GPU handles or
 content payloads.
+
+## Modular architecture and foreground detail kits
+
+`kotoba.render.detail-kit/detail-kit` expands one building identity into portable
+`:hero`, `:gameplay`, or `:crowd` detail. The EDN contains bevel-aware wall, roof,
+window, trim and utility parts; bounded non-colliding foreground props; explicit
+triangle budgets; generated high/medium/low building meshes; and
+`:kotoba.render/material-preset-v1` role references. Variation is derived only
+from the unsigned seed, so Studio, WebGPU and native executors receive identical
+layouts. The stylized family is implemented. The photoreal sibling intentionally
+returns the same keys with `:implementation-status :boundary-only` and
+`:quality-claim :unimplemented` until photoreal assets meet that quality bar.
