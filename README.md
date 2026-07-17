@@ -348,3 +348,22 @@ ratios plus ground contact are checked against a versioned requirement map. A
 sky-only crop, floating landmark, missing ground/context or implausible subject
 scale is rejected as data before an image can claim production evidence.
 Photoreal retains the same boundary and remains `:unsupported-future`.
+
+## Neighborhood and road-junction composition v2
+
+`kotoba.render.neighborhood/neighborhood` composes a coherent T or cross
+junction in one coordinate system. The result contains actual terrain-following
+arm, shoulder and marking meshes plus a central junction mesh; curb, sidewalk
+and verge transforms; grounded building collision shells with generated LOD
+meshes and semantic facades; and visual-only foreground prop/vegetation anchor
+zones. Hero, mid and background tiers expose draw/triangle budgets. Evidence
+proves shells and landmarks are grounded, below a safe skyline height and framed
+with visible ground/junction context. Photoreal uses the same data boundary but
+remains explicitly `:unsupported-future`.
+
+`:safe-height` is an authoring constraint, not evidence-only metadata: generated
+building meshes, collision shells and facade dimensions reserve parapet headroom
+and are resolved below the cap. Evidence derives its shell and facade extents
+from that actual output. Each anchor zone also includes deterministic directly
+renderable descriptors—geometry tuple/reference, full material, transform and
+collision-none policy—for foreground props and vegetation.
