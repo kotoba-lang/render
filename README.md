@@ -367,3 +367,24 @@ and are resolved below the cap. Evidence derives its shell and facade extents
 from that actual output. Each anchor zone also includes deterministic directly
 renderable descriptors—geometry tuple/reference, full material, transform and
 collision-none policy—for foreground props and vegetation.
+
+## Foreground density and material layering
+
+`kotoba.render.foreground-density/foreground-kit` authors deterministic
+foreground/midground camera zones containing shrubs, grass, crates, bollards,
+rocks and debris. Every source mesh is normalized to X/Z `[-0.5,0.5]` and
+grounded Y `[0,1]`; only the descriptor's `:world-size` transform owns scale,
+preventing accidental double scaling. The same result includes directly
+renderable road edge-wear, patch/decal and facade base/trim/window layers with
+actual materials, geometry references, grounded transforms and depth bias.
+Hero, mid and background tiers expose exact density, draw and triangle budgets.
+Photoreal retains the boundary as explicit future work.
+
+Each density descriptor also carries a deterministic balanced
+`:composition-region` (`:foreground-left`, `:foreground-right`,
+`:midground-left`, or `:midground-right`) and matching projection intent as
+`:screen-side` (`:left` or `:right`). The renderer is responsible for validating
+that intent against actual camera projection. Material layers count toward the
+same actual instance budget. Road layers attach in `:neighborhood-world` space;
+facade base/trim/window transforms attach to explicit `:building-facade`
+anchors in `:facade-local` space and must be composed with a building transform.
