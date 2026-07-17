@@ -332,3 +332,19 @@ team contrast; blue/orange/neutral identity is redundantly encoded through hue,
 value, emissive and distinct patterns for colour-blind readability.
 `character-palette` maps existing fabric/armour/weapon/visor/accent mesh ranges
 directly to these material records. Photoreal remains explicitly future work.
+
+## Close-character and production framing contracts
+
+`kotoba.render.close-character/presentation` provides actual portable PBR+toon
+materials for face, eye, mouth, weapon receiver, barrel and optic roles. Close,
+gameplay and crowd tiers scale rim/specular/toon treatment from projected
+character height, while evidence enforces semantic contrast, face/weapon
+occlusion and minimum silhouette feature budgets. `character-palette` maps
+existing character ranges to these records.
+
+`production-framing-evidence` is a renderer-independent, fail-closed capture
+gate. Measured ground, environmental context, sky, floating-landmark and subject
+ratios plus ground contact are checked against a versioned requirement map. A
+sky-only crop, floating landmark, missing ground/context or implausible subject
+scale is rejected as data before an image can claim production evidence.
+Photoreal retains the same boundary and remains `:unsupported-future`.
