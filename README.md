@@ -384,7 +384,13 @@ Each density descriptor also carries a deterministic balanced
 `:composition-region` (`:foreground-left`, `:foreground-right`,
 `:midground-left`, or `:midground-right`) and matching projection intent as
 `:screen-side` (`:left` or `:right`). The renderer is responsible for validating
-that intent against actual camera projection. Material layers count toward the
+that intent against actual camera projection. Authoritative selection hints are
+top-level `:ground-contact-screen-y-range`, `:screen-extent-range`,
+`:cluster-id`, and `:cluster-role`. Foreground candidates use the normalized
+screen ground band `[0.58,0.90]`, midground uses `[0.42,0.72]`, and per-kind
+extent ranges prevent isolated oversized blobs or unreadably thin props.
+Deterministic paired clusters give every left/right hero and mid-tier foreground
+region both vegetation and a solid prop/rock. Material layers count toward the
 same actual instance budget. Road layers attach in `:neighborhood-world` space;
 facade base/trim/window transforms attach to explicit `:building-facade`
 anchors in `:facade-local` space and must be composed with a building transform.
