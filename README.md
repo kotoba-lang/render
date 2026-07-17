@@ -307,3 +307,15 @@ and cylinder mesh tuples, transforms and draw/triangle budgets.
 `for-settlement-instance` derives dimensions and archetype directly from a
 settlement collision shell. Photoreal returns the same boundary without claiming
 an implementation.
+
+## Character grounding and contact presentation
+
+`kotoba.render.grounding/grounding-presentation` returns a portable stylized
+contact-shadow presentation tied to the existing character rig. It includes
+left/right foot anchors, an actual indexed XZ ellipse mesh, unlit multiply/AO
+material data, renderer-ready transforms, and near/mid/far distance policy.
+Near characters receive one restrained body ellipse plus grounded foot patches;
+mid characters use one lower-resolution ellipse; far contact geometry is
+removed. Evidence reports contact counts, opacity, clearance and shadow-to-body
+ratios, including explicit no-floating/no-oversized checks. The photoreal family
+uses the same API boundary but is marked `:unsupported-future`.
