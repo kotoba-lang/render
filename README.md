@@ -233,3 +233,26 @@ The `:marking` material part is generated from the same centerline, cumulative
 distance and height sampler. Its deterministic `:dash-length`, `:gap-length`,
 `:phase`, `:offsets`, `:clearance` and per-LOD `:budget` contract keeps paint on
 sloped terrain without bridging dash gaps or sharing the asphalt material.
+# Shared world material presets
+
+`kotoba.render.world-presets` owns renderer-neutral vegetation and architecture
+looks. They do not belong to a WebGPU or native executor. A scene resolves one
+role or a complete role palette as pure EDN:
+
+```clojure
+(require '[kotoba.render.world-presets :as presets])
+
+(presets/resolve-preset
+ {:family :stylized :domain :vegetation :role :foliage :entity-id "tree-42"})
+
+(presets/role-palette
+ {:family :stylized :domain :architecture :entity-id "depot-7"})
+```
+
+The result uses `:kotoba.render/material-preset-v1`, with stable preset IDs such
+as `:stylized/vegetation-foliage` and `:photoreal/architecture-wall`. Both
+families keep the same domain/role, outline, variation and LOD boundary;
+`:stylized` selects complete toon-PBR overrides while `:photoreal` selects PBR.
+Palette jitter is deterministic from `:entity-id`, never frame state or platform
+hashing. `resolution-evidence` reports selected IDs/roles without GPU handles or
+content payloads.
