@@ -379,3 +379,10 @@ renderable road edge-wear, patch/decal and facade base/trim/window layers with
 actual materials, geometry references, grounded transforms and depth bias.
 Hero, mid and background tiers expose exact density, draw and triangle budgets.
 Photoreal retains the boundary as explicit future work.
+
+Each density descriptor also carries a deterministic balanced
+`:composition-region` (`:foreground-left`, `:foreground-right`,
+`:midground-left`, or `:midground-right`). Material layers count toward the same
+actual instance budget. Road layers attach in `:neighborhood-world` space;
+facade base/trim/window transforms attach to explicit `:building-facade`
+anchors in `:facade-local` space and must be composed with a building transform.

@@ -10,11 +10,11 @@
 (def material-contract :kotoba.render/material-preset-v1)
 
 (def tier-policy
-  {:hero {:instance-budget 30 :draw-budget 42 :triangle-budget 3200
+  {:hero {:instance-budget 36 :draw-budget 42 :triangle-budget 3200
           :foreground-count 18 :midground-count 12}
-   :mid {:instance-budget 18 :draw-budget 28 :triangle-budget 1800
+   :mid {:instance-budget 24 :draw-budget 28 :triangle-budget 1800
          :foreground-count 10 :midground-count 8}
-   :background {:instance-budget 8 :draw-budget 16 :triangle-budget 720
+   :background {:instance-budget 14 :draw-budget 16 :triangle-budget 720
                 :foreground-count 3 :midground-count 5}})
 
 (def kinds [:shrub :grass :crate :bollard :rock :debris])
@@ -100,9 +100,10 @@
         cos #?(:clj Math/cos :cljs js/Math.cos) sin #?(:clj Math/sin :cljs js/Math.sin)
         [ox _ oz] origin
         scale-factor (+ 0.86 (* 0.28 (unit seed (+ 300 index))))
-        size (mapv #(* % scale-factor) (:size (kind-profile kind)))]
+        size (mapv #(* % scale-factor) (:size (kind-profile kind)))
+        region (keyword (str (name zone) "-" (if (even? index) "left" "right")))]
     {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
-     :camera-zone zone :kind kind :geometry-ref kind
+     :camera-zone zone :composition-region region :kind kind :geometry-ref kind
      :geometry-space :normalized-unit
      :material-role role :material (material-records role)
      :material-ref (material-ref family role (str (name zone) "/" index))
@@ -112,7 +113,7 @@
                  :grounded? true}
      :collision {:mode :none :visual-only? true}}))
 
-(defn- layer-descriptor [family index role offset scale geometry-ref clearance]
+(defn- layer-descriptor [family index role offset scale geometry-ref clearance attachment]
   {:descriptor/id (keyword (str "material-layer-" index))
    :camera-zone :foreground :kind :material-layer
    :geometry-ref geometry-ref :geometry-space :normalized-unit
@@ -121,28 +122,37 @@
    :transform {:offset (update offset 1 + clearance) :scale scale
                :scale-mode :world-size :rotation [0.0 0.0 0.0] :grounded? true}
    :collision {:mode :none :visual-only? true}
+   :attachment attachment
    :layering {:projection (if (#{:road-edge-wear :road-patch :road-decal} role)
                             :ground :facade)
               :depth-bias clearance :alpha-mode :blend}})
 
 (defn- material-layers [family origin ground-y]
   (let [[x _ z] origin]
-    [(layer-descriptor family 0 :road-edge-wear [(- x 3.2) ground-y z] [5.2 0.01 0.72] :crate 0.012)
-     (layer-descriptor family 1 :road-patch [(+ x 2.1) ground-y (+ z 1.4)] [2.4 0.01 1.6] :crate 0.014)
-     (layer-descriptor family 2 :road-decal [x ground-y (- z 2.2)] [3.0 0.01 0.32] :crate 0.016)
-     (layer-descriptor family 3 :facade-base [(- x 5.0) ground-y (+ z 5.0)] [4.0 2.2 0.10] :crate 0.0)
-     (layer-descriptor family 4 :facade-trim [(- x 5.0) (+ ground-y 1.7) (+ z 5.08)] [4.2 0.20 0.08] :crate 0.0)
-     (layer-descriptor family 5 :facade-window [(- x 5.0) (+ ground-y 0.72) (+ z 5.13)] [1.3 0.82 0.05] :crate 0.0)]))
+    [(layer-descriptor family 0 :road-edge-wear [(- x 3.2) ground-y z] [5.2 0.01 0.72] :crate 0.012
+                       {:target :road-surface :space :neighborhood-world :anchor :road-edge})
+     (layer-descriptor family 1 :road-patch [(+ x 2.1) ground-y (+ z 1.4)] [2.4 0.01 1.6] :crate 0.014
+                       {:target :road-surface :space :neighborhood-world :anchor :carriageway})
+     (layer-descriptor family 2 :road-decal [x ground-y (- z 2.2)] [3.0 0.01 0.32] :crate 0.016
+                       {:target :road-surface :space :neighborhood-world :anchor :lane})
+     ;; Facade offsets are local to the consuming building facade. They are not
+     ;; fake world coordinates relative to the neighborhood origin.
+     (layer-descriptor family 3 :facade-base [0.0 0.0 0.05] [4.0 2.2 0.10] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :base})
+     (layer-descriptor family 4 :facade-trim [0.0 1.7 0.08] [4.2 0.20 0.08] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :trim-band})
+     (layer-descriptor family 5 :facade-window [0.0 0.72 0.13] [1.3 0.82 0.05] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :window-bay})]))
 
 (defn- budget [descriptors layers library tier]
   (let [triangles (+ (reduce + 0 (map #(quot (count (nth (get-in library [(:geometry-ref %) :mesh]) 3)) 3)
                                       descriptors))
                      (* 12 (count layers)))
         draws (+ (count descriptors) (count layers)) policy (tier-policy tier)]
-    {:instances (count descriptors) :instance-budget (:instance-budget policy)
+    {:instances (+ (count descriptors) (count layers)) :instance-budget (:instance-budget policy)
      :draws draws :draw-budget (:draw-budget policy)
      :triangles triangles :triangle-budget (:triangle-budget policy)
-     :within-budget? (and (<= (count descriptors) (:instance-budget policy))
+     :within-budget? (and (<= (+ (count descriptors) (count layers)) (:instance-budget policy))
                           (<= draws (:draw-budget policy))
                           (<= triangles (:triangle-budget policy)))}))
 

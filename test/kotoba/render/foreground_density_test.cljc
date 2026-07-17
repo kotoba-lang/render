@@ -35,8 +35,23 @@
     (is (= (:midground-count policy) (count (get-in resolved [:camera-zones :midground]))))
     (is (= (:instance-budget policy)
            (+ (count (get-in resolved [:camera-zones :foreground]))
-              (count (get-in resolved [:camera-zones :midground])))))
+              (count (get-in resolved [:camera-zones :midground]))
+              (count (:material-layers resolved)))))
+    (is (= (:instance-budget policy) (get-in resolved [:budget :instances])))
     (is (true? (get-in resolved [:budget :within-budget?])))))
+
+(deftest foreground-and-midground-have-balanced-left-right-composition
+  (doseq [tier [:hero :mid]
+          :let [resolved (density/foreground-kit (assoc base :tier tier))]
+          zone [:foreground :midground]
+          :let [descriptors (get-in resolved [:camera-zones zone])
+                counts (frequencies (map :composition-region descriptors))
+                left (get counts (keyword (str (name zone) "-left")) 0)
+                right (get counts (keyword (str (name zone) "-right")) 0)]]
+    (is (pos? left))
+    (is (pos? right))
+    (is (<= (#?(:clj Math/abs :cljs js/Math.abs) (- left right)) 1))
+    (is (every? #(zero? (get-in % [:transform :offset 1])) descriptors))))
 
 (deftest layering-is-renderer-consumable-not-metadata-only
   (let [layers (:material-layers (density/foreground-kit base))]
@@ -46,6 +61,13 @@
     (is (every? map? (map :material layers)))
     (is (every? keyword? (map :geometry-ref layers)))
     (is (every? #(= :world-size (get-in % [:transform :scale-mode])) layers))
+    (is (= #{[:road-surface :neighborhood-world]
+             [:building-facade :facade-local]}
+           (set (map (juxt #(get-in % [:attachment :target])
+                           #(get-in % [:attachment :space])) layers))))
+    (is (= #{:base :trim-band :window-bay}
+           (set (map #(get-in % [:attachment :anchor])
+                     (filter #(= :building-facade (get-in % [:attachment :target])) layers)))))
     (is (every? #(= {:mode :none :visual-only? true} (:collision %)) layers))))
 
 (deftest photoreal-boundary-is-future
