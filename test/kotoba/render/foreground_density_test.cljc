@@ -41,7 +41,7 @@
     (is (true? (get-in resolved [:budget :within-budget?])))))
 
 (deftest foreground-and-midground-have-balanced-left-right-composition
-  (doseq [tier [:hero :mid]
+  (doseq [tier [:hero :mid :background]
           :let [resolved (density/foreground-kit (assoc base :tier tier))]
           zone [:foreground :midground]
           :let [descriptors (get-in resolved [:camera-zones zone])
@@ -56,6 +56,31 @@
                      (keyword (str (name zone) "-" (name screen-side)))))
                 descriptors))
     (is (every? #(zero? (get-in % [:transform :offset 1])) descriptors))))
+
+(deftest selection-intent-has-bands-extents-and-mixed-foreground-clusters
+  (let [extent-ranges {:shrub [0.06 0.16] :grass [0.025 0.08]
+                       :crate [0.04 0.10] :bollard [0.018 0.05]
+                       :rock [0.04 0.11] :debris [0.025 0.075]}]
+    (doseq [tier [:hero :mid :background]
+          :let [resolved (density/foreground-kit (assoc base :tier tier))]
+          zone [:foreground :midground]
+          :let [descriptors (get-in resolved [:camera-zones zone])]]
+      (is (every? #(= (if (= zone :foreground) [0.58 0.90] [0.42 0.72])
+                      (:ground-contact-screen-y-range %))
+                  descriptors))
+      (is (every? #(= (extent-ranges (:kind %)) (:screen-extent-range %)) descriptors))
+      (is (every? keyword? (map :cluster-id descriptors)))
+      (is (every? #{:vegetation :solid-prop} (map :cluster-role descriptors)))))
+  (doseq [tier [:hero :mid]
+          :let [foreground (get-in (density/foreground-kit (assoc base :tier tier))
+                                   [:camera-zones :foreground])]
+          side [:left :right]
+          :let [side-descriptors (filter #(= side (:screen-side %)) foreground)]]
+    (is (= #{:vegetation :solid-prop} (set (map :cluster-role side-descriptors))))
+    (is (every? #(= #{:vegetation :solid-prop} (set (map :cluster-role %)))
+                (vals (group-by :cluster-id side-descriptors))))
+    (is (some #{:shrub :grass} (map :kind side-descriptors)))
+    (is (some #{:crate :bollard :rock :debris} (map :kind side-descriptors)))))
 
 (deftest layering-is-renderer-consumable-not-metadata-only
   (let [layers (:material-layers (density/foreground-kit base))]

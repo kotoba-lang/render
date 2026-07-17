@@ -18,6 +18,20 @@
                 :foreground-count 3 :midground-count 5}})
 
 (def kinds [:shrub :grass :crate :bollard :rock :debris])
+(def vegetation-kinds [:shrub :grass])
+(def solid-kinds [:crate :bollard :rock :debris])
+
+(def ^:private ground-contact-screen-y-ranges
+  {:foreground [0.58 0.90]
+   :midground [0.42 0.72]})
+
+(def ^:private screen-extent-ranges
+  {:shrub [0.06 0.16]
+   :grass [0.025 0.08]
+   :crate [0.04 0.10]
+   :bollard [0.018 0.05]
+   :rock [0.04 0.11]
+   :debris [0.025 0.075]})
 
 (def ^:private kind-profile
   {:shrub {:size [2.2 1.5 1.9] :role :foliage}
@@ -93,7 +107,11 @@
                         kinds)))
 
 (defn- descriptor [family seed index zone origin radius ground-y]
-  (let [kind (nth kinds (mod (+ index (bit-and seed 5)) (count kinds)))
+  (let [cluster-role (if (even? (quot index 2)) :vegetation :solid-prop)
+        role-kinds (if (= cluster-role :vegetation) vegetation-kinds solid-kinds)
+        kind (nth role-kinds
+                  (mod (bit-and (procedural/coordinate-hash seed index 31 337) 65535)
+                       (count role-kinds)))
         role (:role (kind-profile kind))
         angle (* 6.283185307179586 (unit seed (+ 100 index)))
         r (* radius (+ 0.18 (* 0.78 (unit seed (+ 200 index)))))
@@ -102,9 +120,13 @@
         scale-factor (+ 0.86 (* 0.28 (unit seed (+ 300 index))))
         size (mapv #(* % scale-factor) (:size (kind-profile kind)))
         screen-side (if (even? index) :left :right)
-        region (keyword (str (name zone) "-" (name screen-side)))]
+        region (keyword (str (name zone) "-" (name screen-side)))
+        cluster-id (keyword (str (name zone) "-" (name screen-side) "-cluster"))]
     {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
      :camera-zone zone :composition-region region :screen-side screen-side
+     :ground-contact-screen-y-range (ground-contact-screen-y-ranges zone)
+     :screen-extent-range (screen-extent-ranges kind)
+     :cluster-id cluster-id :cluster-role cluster-role
      :kind kind :geometry-ref kind
      :geometry-space :normalized-unit
      :material-role role :material (material-records role)
