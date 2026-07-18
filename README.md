@@ -393,9 +393,12 @@ grass range permits readable blade clusters through `0.11` screen extent while
 shrubs remain capped at `0.16`. Supplying normalized-or-normalizable
 `:camera-facing-direction [x z]`—the ground-plane direction from the composition
 origin/target **toward the camera**, not camera-forward from camera to look-at—
-moves foreground vegetation into the near half-space independent of world
-orientation. This keeps grounded clusters in the lower frame without weakening
-the shared contact gate. Omitting it preserves the deterministic radial layout.
+moves every foreground vegetation and solid-prop candidate into a strong near
+depth band independent of world orientation. Its derived lateral axis assigns
+actual projected left/right placement, while deterministic depth/lateral jitter
+avoids a rigid row. This keeps grounded clusters in the lower frame without
+weakening the shared contact or extent gates. Omitting it preserves the
+deterministic radial layout.
 Deterministic paired clusters give every left/right hero and mid-tier foreground
 region both vegetation and a solid prop/rock. Material layers count toward the
 same actual instance budget. Road layers attach in `:neighborhood-world` space;
