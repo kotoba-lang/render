@@ -416,7 +416,9 @@ window bank, door, and stepped roof silhouette. Road breakup publishes a
 top-level final-world `:bounds`; both road candidates require subject exclusion
 and are eligible only in `:junction-center`. With `:camera-facing-direction`,
 the shared ground-plane basis derives a lateral axis and places both candidates
-on opposite lower-road shoulders; no world X/Z direction is assumed. Each role
+on opposite lower-road shoulders; a camera-relative near-depth bias projects
+every piece below the subject rather than forcing it through narrow side bands,
+and no world X/Z direction is assumed. Each role
 contains only two broad safe pieces, so a subject-overlapping center island
 cannot invalidate its whole candidate. Their final-world AABBs do not overlap,
 and their actual island/fragment meshes use complementary masks.
