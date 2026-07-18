@@ -21,6 +21,12 @@
 (def vegetation-kinds [:shrub :grass])
 (def solid-kinds [:crate :bollard :rock :debris])
 
+(def geometry-variants
+  {:shrub [:multi-lobe-a :multi-lobe-b :multi-lobe-c]
+   :grass [:multi-blade-a :multi-blade-b :multi-blade-c]
+   :rock [:angular-a :angular-b :angular-c :angular-d]
+   :crate [:standard] :bollard [:standard] :debris [:standard]})
+
 (def ^:private ground-contact-screen-y-ranges
   {:foreground [0.58 0.90]
    :midground [0.42 0.72]})
@@ -38,7 +44,7 @@
    :grass {:size [1.1 0.72 0.9] :role :grass}
    :crate {:size [0.85 0.78 0.85] :role :utility}
    :bollard {:size [0.24 0.86 0.24] :role :utility}
-   :rock {:size [0.95 0.62 0.78] :role :trunk}
+   :rock {:size [0.68 0.42 0.56] :role :trunk}
    :debris {:size [0.62 0.16 0.34] :role :utility}})
 
 (def material-records
@@ -46,13 +52,13 @@
    :grass {:base-color [0.22 0.48 0.16 1.0] :metallic 0.0 :roughness 0.92}
    :trunk {:base-color [0.25 0.17 0.10 1.0] :metallic 0.0 :roughness 0.95}
    :utility {:base-color [0.20 0.23 0.27 1.0] :metallic 0.46 :roughness 0.48}
-   :road-edge-wear {:base-color [0.22 0.20 0.17 0.72] :metallic 0.0 :roughness 0.97}
-   :road-patch {:base-color [0.045 0.05 0.06 0.92] :metallic 0.0 :roughness 0.94}
-   :road-decal {:base-color [0.72 0.58 0.24 0.78] :metallic 0.0 :roughness 0.78}
-   :facade-base {:base-color [0.34 0.27 0.22 1.0] :metallic 0.02 :roughness 0.88}
-   :facade-trim {:base-color [0.52 0.38 0.21 1.0] :metallic 0.16 :roughness 0.58}
-   :facade-window {:base-color [0.045 0.38 0.54 1.0] :metallic 0.10 :roughness 0.18
-                   :emissive [0.01 0.18 0.30] :emissive-strength 0.54}})
+   :road-breakup {:base-color [0.10 0.09 0.075 0.82] :metallic 0.0 :roughness 0.96}
+   :facade-base {:base-color [0.27 0.20 0.15 1.0] :metallic 0.01 :roughness 0.91}
+   :facade-trim {:base-color [0.72 0.49 0.22 1.0] :metallic 0.12 :roughness 0.48}
+   :facade-window {:base-color [0.025 0.16 0.23 1.0] :metallic 0.18 :roughness 0.12
+                   :emissive [0.01 0.10 0.18] :emissive-strength 0.34}
+   :facade-door {:base-color [0.16 0.075 0.035 1.0] :metallic 0.08 :roughness 0.68}
+   :facade-roof {:base-color [0.08 0.095 0.11 1.0] :metallic 0.34 :roughness 0.52}})
 
 (defn- unit [seed salt]
   (/ (double (bit-and (procedural/coordinate-hash seed salt 23 251) 65535)) 65535.0))
@@ -79,20 +85,66 @@
      :normalized-bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
      :source-bounds {:min [min-x min-y min-z] :max [max-x max-y max-z]}}))
 
-(defn- source-mesh [kind seed]
+(defn- transform-mesh [[positions normals uvs indices] [sx sy sz] [tx ty tz]]
+  [(vec (mapcat (fn [[x y z]] [(+ tx (* sx x)) (+ ty (* sy y)) (+ tz (* sz z))])
+                (partition 3 positions)))
+   normals uvs indices])
+
+(defn- combine-mesh [meshes]
+  (reduce (fn [[positions normals uvs indices] [p n u idx]]
+            (let [base (quot (count positions) 3)]
+              [(into positions p) (into normals n) (into uvs u)
+               (into indices (map #(+ base %) idx))]))
+          [[] [] [] []] meshes))
+
+(defn- layer-mesh [kind]
+  (case kind
+    :road-breakup-islands
+    (combine-mesh
+     (mapv (fn [[scale offset]] (transform-mesh (mesh/cube) scale offset))
+           [[[0.24 0.10 0.20] [-0.34 0.0 -0.30]] [[0.18 0.08 0.28] [0.03 0.0 -0.28]]
+            [[0.22 0.09 0.16] [0.34 0.0 -0.12]] [[0.20 0.08 0.22] [-0.23 0.0 0.02]]
+            [[0.16 0.07 0.18] [0.18 0.0 0.05]] [[0.26 0.09 0.17] [-0.06 0.0 0.30]]
+            [[0.14 0.06 0.15] [0.37 0.0 0.31]]]))
+    :facade-window-bank
+    (combine-mesh (mapv #(transform-mesh (mesh/cube) [0.24 0.86 0.34] [% 0.0 0.0])
+                        [-0.34 0.0 0.34]))
+    :facade-roof-step
+    (combine-mesh [(transform-mesh (mesh/cube) [0.46 0.58 0.72] [-0.27 -0.10 0.0])
+                   (transform-mesh (mesh/cube) [0.38 0.86 0.78] [0.11 0.04 0.0])
+                   (transform-mesh (mesh/cube) [0.20 0.48 0.66] [0.39 -0.15 0.0])])
+    (mesh/cube)))
+
+(defn- rock-mesh [seed variant]
+  (let [[positions normals uvs indices] (mesh/sphere 3 6)
+        variant-index ({:angular-a 0 :angular-b 1 :angular-c 2 :angular-d 3} variant)
+        shear (* 0.10 (- variant-index 1.5))
+        ridge (+ 0.12 (* 0.035 (mod seed 3)))
+        shaped (vec (mapcat (fn [[x y z]]
+                              (let [level (+ 0.70 (* 0.30 (- 1.0 (* 2.0
+                                                                    (#?(:clj Math/abs :cljs js/Math.abs)
+                                                                     y)))))]
+                                [(+ (* x level) (* shear z))
+                                 (+ y (* ridge x z))
+                                 (* z (+ 0.82 (* 0.06 variant-index) (* 0.12 x)))]))
+                            (partition 3 positions)))]
+    [shaped normals uvs indices]))
+
+(defn- source-mesh [kind seed variant]
   (case kind
     :shrub (vegetation/vegetation-mesh
             {:variant :shrub :width 2.2 :depth 1.9 :height 1.5 :seed seed} :low)
     :grass (vegetation/vegetation-mesh
             {:variant :grass-tuft :width 1.1 :depth 0.9 :height 0.72 :seed seed} :low)
     :bollard (mesh/cylinder-pipe 0.5 0.0 1.0 8)
-    :rock (mesh/sphere 4 7)
+    :rock (rock-mesh seed variant)
     (mesh/cube)))
 
 (defn- material-ref [family role entity-id]
   (let [preset-role (case role :foliage :foliage :grass :grass :trunk :trunk
                           :facade-trim :trim :facade-window :window
-                          :facade-base :wall :utility)]
+                          :facade-base :wall :facade-door :door :facade-roof :roof
+                          :road-breakup :road :utility)]
     {:contract material-contract :family family
      :preset-id (keyword (name family)
                          (str (if (#{:foliage :grass :trunk} preset-role)
@@ -101,10 +153,24 @@
      :domain (if (#{:foliage :grass :trunk} preset-role) :vegetation :architecture)
      :role preset-role :entity-id entity-id}))
 
+(defn- geometry-ref [kind variant]
+  (if (= variant :standard) kind (keyword (str (name kind) "-" (name variant)))))
+
 (defn- geometry-library [seed]
-  (into {} (map-indexed (fn [index kind]
-                          [kind (normalize-mesh (source-mesh kind (+ seed index)))])
-                        kinds)))
+  (into {:road-breakup-islands (normalize-mesh (layer-mesh :road-breakup-islands))
+         :facade-window-bank (normalize-mesh (layer-mesh :facade-window-bank))
+         :facade-roof-step (normalize-mesh (layer-mesh :facade-roof-step))}
+        (for [[kind variants] geometry-variants
+              [variant-index variant] (map-indexed vector variants)]
+          [(geometry-ref kind variant)
+           (normalize-mesh (source-mesh kind (+ seed variant-index) variant))])))
+
+(defn- context-seed [seed entity-id origin]
+  (reduce (fn [value character]
+            (mod (+ (* value 33) #?(:clj (int character)
+                                    :cljs (.charCodeAt character 0)))
+                 4294967296))
+          seed (pr-str [entity-id (mapv double origin)])))
 
 (defn- normalize-facing-direction [direction]
   (when direction
@@ -125,6 +191,10 @@
         kind (nth role-kinds
                   (mod (bit-and (procedural/coordinate-hash seed index 31 337) 65535)
                        (count role-kinds)))
+        variants (geometry-variants kind)
+        geometry-variant (nth variants
+                              (mod (bit-and (procedural/coordinate-hash seed index 43 419) 65535)
+                                   (count variants)))
         role (:role (kind-profile kind))
         angle (* 6.283185307179586 (unit seed (+ 100 index)))
         r (* radius (+ 0.18 (* 0.78 (unit seed (+ 200 index)))))
@@ -154,7 +224,8 @@
      :screen-extent-range (screen-extent-ranges kind)
      :camera-facing-direction camera-facing-direction
      :cluster-id cluster-id :cluster-role cluster-role
-     :kind kind :geometry-ref kind
+     :kind kind :geometry-variant geometry-variant
+     :geometry-ref (geometry-ref kind geometry-variant)
      :geometry-space :normalized-unit
      :material-role role :material (material-records role)
      :material-ref (material-ref family role (str (name zone) "/" index))
@@ -164,41 +235,64 @@
                  :grounded? true}
      :collision {:mode :none :visual-only? true}}))
 
-(defn- layer-descriptor [family index role offset scale geometry-ref clearance attachment]
-  {:descriptor/id (keyword (str "material-layer-" index))
-   :camera-zone :foreground :kind :material-layer
-   :geometry-ref geometry-ref :geometry-space :normalized-unit
-   :material-role role :material (material-records role)
-   :material-ref (material-ref family role (str "layer/" index))
-   :transform {:offset (update offset 1 + clearance) :scale scale
-               :scale-mode :world-size :rotation [0.0 0.0 0.0] :grounded? true}
-   :collision {:mode :none :visual-only? true}
-   :attachment attachment
-   :layering {:projection (if (#{:road-edge-wear :road-patch :road-decal} role)
-                            :ground :facade)
-              :depth-bias clearance :alpha-mode :blend}})
+(defn- layer-descriptor [family index role offset scale geometry-ref clearance attachment eligibility feature]
+  (let [offset (update offset 1 + clearance)
+        [x y z] offset [sx sy sz] scale
+        resolved-bounds {:min [(- x (/ sx 2.0)) y (- z (/ sz 2.0))]
+                         :max [(+ x (/ sx 2.0)) (+ y sy) (+ z (/ sz 2.0))]}
+        road? (= :road-breakup role)]
+    (cond->
+     {:descriptor/id (keyword (str "material-layer-" index))
+      :camera-zone :foreground :kind :material-layer
+      :geometry-ref geometry-ref :geometry-space :normalized-unit
+      :material-role role :material (material-records role)
+      :material-ref (material-ref family role (str "layer/" index))
+      :transform {:offset offset :scale scale :scale-mode :world-size
+                  :rotation [0.0 0.0 0.0] :grounded? true}
+      :collision {:mode :none :visual-only? true}
+      :attachment attachment :attachment-eligibility eligibility :feature feature
+      :layering {:projection (if road? :ground :facade)
+                 :depth-bias clearance :alpha-mode :blend}}
+      road? (assoc :bounds resolved-bounds :bounds-space :final-world)
+      (not road?) (assoc :facade-layer-bounds resolved-bounds
+                         :bounds-space :facade-local-to-building))))
 
 (defn- material-layers [family origin ground-y]
   (let [[x _ z] origin]
-    [(layer-descriptor family 0 :road-edge-wear [(- x 3.2) ground-y z] [5.2 0.01 0.72] :crate 0.012
-                       {:target :road-surface :space :neighborhood-world :anchor :road-edge})
-     (layer-descriptor family 1 :road-patch [(+ x 2.1) ground-y (+ z 1.4)] [2.4 0.01 1.6] :crate 0.014
-                       {:target :road-surface :space :neighborhood-world :anchor :carriageway})
-     (layer-descriptor family 2 :road-decal [x ground-y (- z 2.2)] [3.0 0.01 0.32] :crate 0.016
-                       {:target :road-surface :space :neighborhood-world :anchor :lane})
+    [(layer-descriptor family 0 :road-breakup [x ground-y z] [4.6 0.01 3.4]
+                       :road-breakup-islands 0.014
+                       {:target :road-surface :space :neighborhood-world :anchor :junction-center}
+                       {:target :road-surface :space :neighborhood-world :anchor :junction-center
+                        :subject-exclusion-required? true :eligible-regions #{:junction-center}}
+                       {:mask :broken-asphalt-islands :island-count 7 :center-safe? true})
      ;; Facade offsets are local to the consuming building facade. They are not
      ;; fake world coordinates relative to the neighborhood origin.
-     (layer-descriptor family 3 :facade-base [0.0 0.0 0.05] [4.0 2.2 0.10] :crate 0.0
-                       {:target :building-facade :space :facade-local :anchor :base})
-     (layer-descriptor family 4 :facade-trim [0.0 1.7 0.08] [4.2 0.20 0.08] :crate 0.0
-                       {:target :building-facade :space :facade-local :anchor :trim-band})
-     (layer-descriptor family 5 :facade-window [0.0 0.72 0.13] [1.3 0.82 0.05] :crate 0.0
-                       {:target :building-facade :space :facade-local :anchor :window-bay})]))
+     (layer-descriptor family 1 :facade-base [0.0 0.0 0.05] [4.0 2.4 0.12] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :base}
+                       {:target :building-facade :space :facade-local :anchor :base} {:silhouette :wall-mass})
+     (layer-descriptor family 2 :facade-trim [0.0 1.84 0.10] [4.25 0.20 0.12] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :trim-band}
+                       {:target :building-facade :space :facade-local :anchor :trim-band} {:separation 0.16})
+     (layer-descriptor family 3 :facade-window [0.0 0.95 -0.04] [2.8 0.78 0.06]
+                       :facade-window-bank 0.0
+                       {:target :building-facade :space :facade-local :anchor :window-bay}
+                       {:target :building-facade :space :facade-local :anchor :window-bay}
+                       {:recess-depth 0.09 :panes 3 :pane-gap 0.18})
+     (layer-descriptor family 4 :facade-door [-1.28 0.0 0.13] [0.72 1.32 0.10] :crate 0.0
+                       {:target :building-facade :space :facade-local :anchor :door-bay}
+                       {:target :building-facade :space :facade-local :anchor :door-bay} {:separation 0.20})
+     (layer-descriptor family 5 :facade-roof [0.0 2.38 0.02] [4.45 0.34 0.24]
+                       :facade-roof-step 0.0
+                       {:target :building-facade :space :facade-local :anchor :roof-line}
+                       {:target :building-facade :space :facade-local :anchor :roof-line}
+                       {:silhouette :stepped-roof :overhang 0.22})]))
 
 (defn- budget [descriptors layers library tier]
   (let [triangles (+ (reduce + 0 (map #(quot (count (nth (get-in library [(:geometry-ref %) :mesh]) 3)) 3)
                                       descriptors))
-                     (* 12 (count layers)))
+                     (reduce + 0
+                             (map #(quot (count (nth (get-in library [(:geometry-ref %) :mesh]) 3)) 3)
+                                  layers)))
         draws (+ (count descriptors) (count layers)) policy (tier-policy tier)]
     {:instances (+ (count descriptors) (count layers)) :instance-budget (:instance-budget policy)
      :draws draws :draw-budget (:draw-budget policy)
@@ -221,12 +315,13 @@
     {:schema schema :family family :tier tier :entity-id entity-id
      :implementation-status :boundary-only :quality-claim :unsupported-future
      :geometry-library {} :camera-zones {} :material-layers [] :budget {:within-budget? true}}
-    (let [policy (tier-policy tier) library (geometry-library seed)
+    (let [resolved-seed (context-seed seed entity-id origin)
+          policy (tier-policy tier) library (geometry-library resolved-seed)
           facing-direction (normalize-facing-direction camera-facing-direction)
-          foreground (mapv #(descriptor family seed % :foreground origin (* radius 0.62) ground-y
+          foreground (mapv #(descriptor family resolved-seed % :foreground origin (* radius 0.62) ground-y
                                         facing-direction)
                            (range (:foreground-count policy)))
-          midground (mapv #(descriptor family seed (+ 100 %) :midground origin radius ground-y
+          midground (mapv #(descriptor family resolved-seed (+ 100 %) :midground origin radius ground-y
                                        facing-direction)
                           (range (:midground-count policy)))
           all (vec (concat foreground midground)) layers (material-layers family origin ground-y)]
