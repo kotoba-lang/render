@@ -173,6 +173,25 @@
     (is (every? #(true? (get-in % [:feature :center-safe?])) roads))
     (is (every? #(= :final-world (:bounds-space %)) roads))
     (is (every? #(= 3 (count (:min (:bounds %)))) roads))
+    (is (= #{7 4} (set (map #(count (:bounds-set %)) roads))))
+    (is (every? #(<= 2 (count (:bounds-set %))) roads))
+    (is (every? (fn [road]
+                  (every? #(= #{:min :max} (set (keys %))) (:bounds-set road)))
+                roads))
+    (doseq [road roads
+            :let [[positions _ _ _] (get-in resolved
+                                             [:geometry-library (:geometry-ref road) :mesh])
+                  components (partition (* 24 3) positions)
+                  [ox oy oz] (get-in road [:transform :offset])
+                  [sx sy sz] (get-in road [:transform :scale])]
+            [component piece-bounds] (map vector components (:bounds-set road))
+            [x y z] (partition 3 component)
+            :let [world [(+ ox (* sx x)) (+ oy (* sy y)) (+ oz (* sz z))]]]
+      (is (every? true? (map <= (:min piece-bounds) world (:max piece-bounds)))))
+    (doseq [road roads
+            piece (:bounds-set road)]
+      (is (every? true? (map <= (get-in road [:bounds :min]) (:min piece))))
+      (is (every? true? (map <= (:max piece) (get-in road [:bounds :max])))))
     (let [[left right] (sort-by #(get-in % [:bounds :min 0]) roads)]
       (is (< (get-in left [:bounds :max 0]) (get-in right [:bounds :min 0]))))
     (is (<= 3 (count facade)))

@@ -416,6 +416,10 @@ window bank, door, and stepped roof silhouette. Road breakup publishes a
 top-level final-world `:bounds`; both road candidates require subject exclusion
 and are eligible only in `:junction-center`. Their left/right final-world AABBs
 do not overlap, and their actual island/fragment meshes use complementary masks.
+Each road candidate also exposes top-level `:bounds-set`, a vector of tight
+final-world `{:min [x y z] :max [x y z]}` AABBs generated from the normalized
+vertices of each disconnected island/fragment. Consumers use these pieces for
+subject exclusion while retaining coarse `:bounds` for compatibility.
 Facade descriptors publish `:facade-layer-bounds` in
 `:facade-local-to-building`; a building candidate must compose these with its
 building transform before submitting the resulting final-world AABB to KAMI's
