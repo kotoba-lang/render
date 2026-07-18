@@ -10,11 +10,11 @@
 (def material-contract :kotoba.render/material-preset-v1)
 
 (def tier-policy
-  {:hero {:instance-budget 36 :draw-budget 42 :triangle-budget 3200
+  {:hero {:instance-budget 37 :draw-budget 42 :triangle-budget 3200
           :foreground-count 18 :midground-count 12}
-   :mid {:instance-budget 24 :draw-budget 28 :triangle-budget 1800
+   :mid {:instance-budget 25 :draw-budget 28 :triangle-budget 1800
          :foreground-count 10 :midground-count 8}
-   :background {:instance-budget 14 :draw-budget 16 :triangle-budget 720
+   :background {:instance-budget 15 :draw-budget 16 :triangle-budget 720
                 :foreground-count 3 :midground-count 5}})
 
 (def kinds [:shrub :grass :crate :bollard :rock :debris])
@@ -52,7 +52,8 @@
    :grass {:base-color [0.22 0.48 0.16 1.0] :metallic 0.0 :roughness 0.92}
    :trunk {:base-color [0.25 0.17 0.10 1.0] :metallic 0.0 :roughness 0.95}
    :utility {:base-color [0.20 0.23 0.27 1.0] :metallic 0.46 :roughness 0.48}
-   :road-breakup {:base-color [0.10 0.09 0.075 0.82] :metallic 0.0 :roughness 0.96}
+   :road-edge-wear {:base-color [0.16 0.135 0.10 0.74] :metallic 0.0 :roughness 0.98}
+   :road-patch {:base-color [0.055 0.06 0.065 0.90] :metallic 0.0 :roughness 0.93}
    :facade-base {:base-color [0.27 0.20 0.15 1.0] :metallic 0.01 :roughness 0.91}
    :facade-trim {:base-color [0.72 0.49 0.22 1.0] :metallic 0.12 :roughness 0.48}
    :facade-window {:base-color [0.025 0.16 0.23 1.0] :metallic 0.18 :roughness 0.12
@@ -106,6 +107,11 @@
             [[0.22 0.09 0.16] [0.34 0.0 -0.12]] [[0.20 0.08 0.22] [-0.23 0.0 0.02]]
             [[0.16 0.07 0.18] [0.18 0.0 0.05]] [[0.26 0.09 0.17] [-0.06 0.0 0.30]]
             [[0.14 0.06 0.15] [0.37 0.0 0.31]]]))
+    :road-patch-fragments
+    (combine-mesh
+     (mapv (fn [[scale offset]] (transform-mesh (mesh/cube) scale offset))
+           [[[0.16 0.08 0.62] [-0.34 0.0 -0.12]] [[0.14 0.07 0.48] [0.02 0.0 0.22]]
+            [[0.22 0.09 0.38] [0.33 0.0 -0.28]] [[0.12 0.06 0.30] [0.40 0.0 0.30]]]))
     :facade-window-bank
     (combine-mesh (mapv #(transform-mesh (mesh/cube) [0.24 0.86 0.34] [% 0.0 0.0])
                         [-0.34 0.0 0.34]))
@@ -144,7 +150,7 @@
   (let [preset-role (case role :foliage :foliage :grass :grass :trunk :trunk
                           :facade-trim :trim :facade-window :window
                           :facade-base :wall :facade-door :door :facade-roof :roof
-                          :road-breakup :road :utility)]
+                          :road-edge-wear :road :road-patch :road :utility)]
     {:contract material-contract :family family
      :preset-id (keyword (name family)
                          (str (if (#{:foliage :grass :trunk} preset-role)
@@ -158,6 +164,7 @@
 
 (defn- geometry-library [seed]
   (into {:road-breakup-islands (normalize-mesh (layer-mesh :road-breakup-islands))
+         :road-patch-fragments (normalize-mesh (layer-mesh :road-patch-fragments))
          :facade-window-bank (normalize-mesh (layer-mesh :facade-window-bank))
          :facade-roof-step (normalize-mesh (layer-mesh :facade-roof-step))}
         (for [[kind variants] geometry-variants
@@ -240,7 +247,7 @@
         [x y z] offset [sx sy sz] scale
         resolved-bounds {:min [(- x (/ sx 2.0)) y (- z (/ sz 2.0))]
                          :max [(+ x (/ sx 2.0)) (+ y sy) (+ z (/ sz 2.0))]}
-        road? (= :road-breakup role)]
+        road? (#{:road-edge-wear :road-patch} role)]
     (cond->
      {:descriptor/id (keyword (str "material-layer-" index))
       :camera-zone :foreground :kind :material-layer
@@ -259,29 +266,37 @@
 
 (defn- material-layers [family origin ground-y]
   (let [[x _ z] origin]
-    [(layer-descriptor family 0 :road-breakup [x ground-y z] [4.6 0.01 3.4]
+    [(layer-descriptor family 0 :road-edge-wear [(- x 1.25) ground-y z] [2.0 0.01 3.2]
                        :road-breakup-islands 0.014
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center}
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center
                         :subject-exclusion-required? true :eligible-regions #{:junction-center}}
-                       {:mask :broken-asphalt-islands :island-count 7 :center-safe? true})
+                       {:mask :left-wear-islands :island-count 7 :center-safe? true
+                        :complement :right-patch-fragments})
+     (layer-descriptor family 1 :road-patch [(+ x 1.25) ground-y z] [2.0 0.01 3.2]
+                       :road-patch-fragments 0.016
+                       {:target :road-surface :space :neighborhood-world :anchor :junction-center}
+                       {:target :road-surface :space :neighborhood-world :anchor :junction-center
+                        :subject-exclusion-required? true :eligible-regions #{:junction-center}}
+                       {:mask :right-patch-fragments :island-count 4 :center-safe? true
+                        :complement :left-wear-islands})
      ;; Facade offsets are local to the consuming building facade. They are not
      ;; fake world coordinates relative to the neighborhood origin.
-     (layer-descriptor family 1 :facade-base [0.0 0.0 0.05] [4.0 2.4 0.12] :crate 0.0
+     (layer-descriptor family 2 :facade-base [0.0 0.0 0.05] [4.0 2.4 0.12] :crate 0.0
                        {:target :building-facade :space :facade-local :anchor :base}
                        {:target :building-facade :space :facade-local :anchor :base} {:silhouette :wall-mass})
-     (layer-descriptor family 2 :facade-trim [0.0 1.84 0.10] [4.25 0.20 0.12] :crate 0.0
+     (layer-descriptor family 3 :facade-trim [0.0 1.84 0.10] [4.25 0.20 0.12] :crate 0.0
                        {:target :building-facade :space :facade-local :anchor :trim-band}
                        {:target :building-facade :space :facade-local :anchor :trim-band} {:separation 0.16})
-     (layer-descriptor family 3 :facade-window [0.0 0.95 -0.04] [2.8 0.78 0.06]
+     (layer-descriptor family 4 :facade-window [0.0 0.95 -0.04] [2.8 0.78 0.06]
                        :facade-window-bank 0.0
                        {:target :building-facade :space :facade-local :anchor :window-bay}
                        {:target :building-facade :space :facade-local :anchor :window-bay}
                        {:recess-depth 0.09 :panes 3 :pane-gap 0.18})
-     (layer-descriptor family 4 :facade-door [-1.28 0.0 0.13] [0.72 1.32 0.10] :crate 0.0
+     (layer-descriptor family 5 :facade-door [-1.28 0.0 0.13] [0.72 1.32 0.10] :crate 0.0
                        {:target :building-facade :space :facade-local :anchor :door-bay}
                        {:target :building-facade :space :facade-local :anchor :door-bay} {:separation 0.20})
-     (layer-descriptor family 5 :facade-roof [0.0 2.38 0.02] [4.45 0.34 0.24]
+     (layer-descriptor family 6 :facade-roof [0.0 2.38 0.02] [4.45 0.34 0.24]
                        :facade-roof-step 0.0
                        {:target :building-facade :space :facade-local :anchor :roof-line}
                        {:target :building-facade :space :facade-local :anchor :roof-line}
