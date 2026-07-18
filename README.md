@@ -401,3 +401,20 @@ region both vegetation and a solid prop/rock. Material layers count toward the
 same actual instance budget. Road layers attach in `:neighborhood-world` space;
 facade base/trim/window transforms attach to explicit `:building-facade`
 anchors in `:facade-local` space and must be composed with a building transform.
+
+Wave 13 enriches the normalized meshes rather than relying on selection
+metadata alone. Low-detail grass contains five crossed blades with lateral and
+depth mass; shrubs contain three overlapping canopy lobes; rocks use four
+smaller angular vertex-deformed families. Every density descriptor exposes the
+actual top-level `:geometry-variant`, and the effective seed includes entity and
+origin context so adjacent kits do not repeat the same blobs.
+
+The six-layer budget remains exact: one seven-island road-breakup mesh plus
+facade-local base, high-value trim, a physically separated three-pane recessed
+window bank, door, and stepped roof silhouette. Road breakup publishes a
+top-level final-world `:bounds` and requires subject exclusion in
+`:junction-center`. Facade descriptors publish `:facade-layer-bounds` in
+`:facade-local-to-building`; a building candidate must compose these with its
+building transform before submitting the resulting final-world AABB to KAMI's
+projection gate. `:attachment-eligibility` uses the same target, space, and
+anchor vocabulary as `:attachment`.

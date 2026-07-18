@@ -134,8 +134,14 @@
   (let [lean-x (seed-offset seed 12 (* width 0.08))
         lean-z (seed-offset seed 13 (* depth 0.08))]
     (if (= detail :low)
-      {:foliage [(ellipsoid-part [(* width 0.94) (* height 0.78) (* depth 0.92)]
-                                 [lean-x (* height 0.39) lean-z] 3 6)]}
+      {:foliage [(ellipsoid-part [(* width 0.68) (* height 0.76) (* depth 0.94)]
+                                 [lean-x (* height 0.38) lean-z] 3 6)
+                 (ellipsoid-part [(* width 0.48) (* height 0.58) (* depth 0.52)]
+                                 [(+ lean-x (* width -0.23)) (* height 0.31)
+                                  (+ lean-z (* depth 0.13))] 3 6)
+                 (ellipsoid-part [(* width 0.46) (* height 0.62) (* depth 0.50)]
+                                 [(+ lean-x (* width 0.24)) (* height 0.34)
+                                  (- lean-z (* depth 0.14))] 3 6)]}
       {:foliage [(ellipsoid-part [(* width 0.68) (* height 0.78) (* depth 0.80)]
                        [lean-x (* height 0.39) lean-z] 5 9)
        (ellipsoid-part [(* width 0.52) (* height 0.67) (* depth 0.58)]
@@ -171,7 +177,7 @@
               (ribbon [0.0 1.0] [1.0 0.0])])))
 
 (defn- grass-tuft [{:keys [width depth height seed]} detail]
-  (let [blade-count (if (= detail :high) 9 3)
+  (let [blade-count (if (= detail :high) 9 5)
         meshes
         (mapv (fn [i]
                 (let [[bx bz] (nth [[-0.40 -0.34] [0.40 -0.34] [0.0 0.40]
@@ -180,7 +186,7 @@
                       x (+ (* width bx) (seed-offset seed (+ 30 (* i 2)) (* width 0.10)))
                       z (+ (* depth bz) (seed-offset seed (+ 31 (* i 2)) (* depth 0.10)))
                       h (* height (seed-scale seed (+ 70 i) 0.22))
-                      w (* (min width depth) (if (= detail :high) 0.055 0.085))
+                      w (* (min width depth) (if (= detail :high) 0.055 0.072))
                       lx (seed-offset seed (+ 90 i) (* width 0.12))
                       lz (seed-offset seed (+ 110 i) (* depth 0.12))]
                   (blade x z h w lx lz)))

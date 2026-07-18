@@ -94,7 +94,7 @@
         [low-pos _ _ low-indices] (vegetation/vegetation-mesh spec :low)
         [other-pos] (vegetation/vegetation-mesh (update spec :seed inc) :high)]
     (is (= 36 (quot (count high-indices) 3)) "9 blades x 2 ribbons x 2 faces")
-    (is (= 12 (quot (count low-indices) 3)) "far LOD keeps 3 crossed blades")
+    (is (= 20 (quot (count low-indices) 3)) "far LOD keeps 5 crossed blades")
     (is (> (axis-extent high-pos 0) (* 0.72 (:width spec))))
     (is (> (axis-extent high-pos 2) (* 0.68 (:depth spec))))
     (is (not= high-pos other-pos))

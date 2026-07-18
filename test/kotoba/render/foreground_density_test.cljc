@@ -1,5 +1,6 @@
 (ns kotoba.render.foreground-density-test
   (:require [clojure.test :refer [deftest is]]
+            [clojure.string :as str]
             [kotoba.render.foreground-density :as density]))
 
 (def base {:family :stylized :entity-id :junction-foreground :seed 8128
@@ -121,8 +122,8 @@
 
 (deftest layering-is-renderer-consumable-not-metadata-only
   (let [layers (:material-layers (density/foreground-kit base))]
-    (is (= #{:road-edge-wear :road-patch :road-decal
-             :facade-base :facade-trim :facade-window}
+    (is (= #{:road-breakup :facade-base :facade-trim :facade-window
+             :facade-door :facade-roof}
            (set (map :material-role layers))))
     (is (every? map? (map :material layers)))
     (is (every? keyword? (map :geometry-ref layers)))
@@ -131,10 +132,60 @@
              [:building-facade :facade-local]}
            (set (map (juxt #(get-in % [:attachment :target])
                            #(get-in % [:attachment :space])) layers))))
-    (is (= #{:base :trim-band :window-bay}
+    (is (= #{:base :trim-band :window-bay :door-bay :roof-line}
            (set (map #(get-in % [:attachment :anchor])
                      (filter #(= :building-facade (get-in % [:attachment :target])) layers)))))
     (is (every? #(= {:mode :none :visual-only? true} (:collision %)) layers))))
+
+(deftest geometry-variants-are-real-diverse-and-context-decorrelated
+  (let [a (density/foreground-kit (assoc base :tier :hero))
+        b (density/foreground-kit (assoc base :tier :hero :entity-id :other-junction))
+        descriptors (mapcat second (:camera-zones a))
+        variants (group-by :kind descriptors)]
+    (is (every? keyword? (map :geometry-variant descriptors)))
+    (is (every? #(contains? (:geometry-library a) (:geometry-ref %)) descriptors))
+    (is (<= 2 (count (set (map :geometry-variant (get variants :shrub))))))
+    (is (not= (mapv (juxt :kind :geometry-variant) descriptors)
+              (mapv (juxt :kind :geometry-variant) (mapcat second (:camera-zones b)))))
+    (doseq [kind [:grass :shrub]
+            [_ geometry] (filter (fn [[ref _]] (str/starts-with? (name ref) (name kind)))
+                                 (:geometry-library a))
+            :let [{[min-x _ min-z] :min [max-x _ max-z] :max} (:source-bounds geometry)
+                  width (- max-x min-x) depth (- max-z min-z)]]
+      (is (> width 0.45))
+      (is (> depth 0.40))
+      (is (<= 0.55 (/ width depth) 1.8)))
+    (let [rock-scales (map #(get-in % [:transform :scale]) (get variants :rock))]
+      (is (every? #(<= (first %) 0.78) rock-scales)))))
+
+(deftest production-layers-have-facade-separation-and-safe-road-eligibility
+  (let [resolved (density/foreground-kit base)
+        layers (:material-layers resolved)
+        by-role (into {} (map (juxt :material-role identity) layers))
+        road (by-role :road-breakup)
+        facade (remove #(= :road-breakup (:material-role %)) layers)
+        value (fn [role] (/ (reduce + (take 3 (get-in by-role [role :material :base-color]))) 3.0))]
+    (is (true? (get-in road [:attachment-eligibility :subject-exclusion-required?])))
+    (is (= #{:junction-center} (get-in road [:attachment-eligibility :eligible-regions])))
+    (is (true? (get-in road [:feature :center-safe?])))
+    (is (= :final-world (:bounds-space road)))
+    (is (= 3 (count (:min (:bounds road)))))
+    (is (every? #(= (:attachment %) (:attachment-eligibility %)) facade))
+    (is (every? #(= :facade-local-to-building (:bounds-space %)) facade))
+    (is (every? #(= 3 (count (:min (:facade-layer-bounds %)))) facade))
+    (is (pos? (get-in by-role [:facade-window :feature :recess-depth])))
+    (is (<= 3 (get-in by-role [:facade-window :feature :panes])))
+    (is (< (value :facade-window) (value :facade-base) (value :facade-trim)))
+    (is (= :stepped-roof (get-in by-role [:facade-roof :feature :silhouette])))
+    (is (every? #(contains? (:geometry-library resolved) (:geometry-ref %)) layers))
+    (is (= 84 (quot (count (get-in resolved [:geometry-library :road-breakup-islands :mesh 3])) 3)))
+    (is (= 36 (quot (count (get-in resolved [:geometry-library :facade-window-bank :mesh 3])) 3)))
+    (let [all (concat (mapcat second (:camera-zones resolved)) layers)
+          actual-triangles (reduce + (map #(quot (count (get-in resolved
+                                                                 [:geometry-library (:geometry-ref %) :mesh 3]))
+                                                  3)
+                                          all))]
+      (is (= actual-triangles (get-in resolved [:budget :triangles]))))))
 
 (deftest photoreal-boundary-is-future
   (let [resolved (density/foreground-kit (assoc base :family :photoreal))]
