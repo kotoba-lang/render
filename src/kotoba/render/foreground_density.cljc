@@ -27,7 +27,7 @@
 
 (def ^:private screen-extent-ranges
   {:shrub [0.06 0.16]
-   :grass [0.025 0.08]
+   :grass [0.025 0.11]
    :crate [0.04 0.10]
    :bollard [0.018 0.05]
    :rock [0.04 0.11]
@@ -106,7 +106,20 @@
                           [kind (normalize-mesh (source-mesh kind (+ seed index)))])
                         kinds)))
 
-(defn- descriptor [family seed index zone origin radius ground-y]
+(defn- normalize-facing-direction [direction]
+  (when direction
+    (when-not (and (sequential? direction) (= 2 (count direction))
+                   (every? number? direction))
+      (throw (ex-info "camera-facing-direction must be a 2D X/Z vector"
+                      {:camera-facing-direction direction})))
+    (let [[x z] direction
+          length (#?(:clj Math/sqrt :cljs js/Math.sqrt) (+ (* x x) (* z z)))]
+      (when (<= length 1.0e-9)
+        (throw (ex-info "camera-facing-direction must be non-zero"
+                        {:camera-facing-direction direction})))
+      [(/ x length) (/ z length)])))
+
+(defn- descriptor [family seed index zone origin radius ground-y camera-facing-direction]
   (let [cluster-role (if (even? (quot index 2)) :vegetation :solid-prop)
         role-kinds (if (= cluster-role :vegetation) vegetation-kinds solid-kinds)
         kind (nth role-kinds
@@ -121,17 +134,31 @@
         size (mapv #(* % scale-factor) (:size (kind-profile kind)))
         screen-side (if (even? index) :left :right)
         region (keyword (str (name zone) "-" (name screen-side)))
-        cluster-id (keyword (str (name zone) "-" (name screen-side) "-cluster"))]
+        cluster-id (keyword (str (name zone) "-" (name screen-side) "-cluster"))
+        radial [(* r (cos angle)) (* r (sin angle))]
+        camera-facing? (and (= zone :foreground) (= cluster-role :vegetation)
+                            camera-facing-direction)
+        [dx dz] (if camera-facing?
+                  (let [[fx fz] camera-facing-direction
+                        projection (+ (* (first radial) fx) (* (second radial) fz))
+                        lateral [(- (first radial) (* projection fx))
+                                 (- (second radial) (* projection fz))]
+                        facing-depth (max (* radius 0.18)
+                                          (#?(:clj Math/abs :cljs js/Math.abs) projection))]
+                    [(+ (first lateral) (* facing-depth fx))
+                     (+ (second lateral) (* facing-depth fz))])
+                  radial)]
     {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
      :camera-zone zone :composition-region region :screen-side screen-side
      :ground-contact-screen-y-range (ground-contact-screen-y-ranges zone)
      :screen-extent-range (screen-extent-ranges kind)
+     :camera-facing-direction camera-facing-direction
      :cluster-id cluster-id :cluster-role cluster-role
      :kind kind :geometry-ref kind
      :geometry-space :normalized-unit
      :material-role role :material (material-records role)
      :material-ref (material-ref family role (str (name zone) "/" index))
-     :transform {:offset [(+ ox (* r (cos angle))) ground-y (+ oz (* r (sin angle)))]
+     :transform {:offset [(+ ox dx) ground-y (+ oz dz)]
                  :scale size :scale-mode :world-size
                  :rotation [0.0 (* 6.283185307179586 (unit seed (+ 400 index))) 0.0]
                  :grounded? true}
@@ -181,7 +208,11 @@
                           (<= triangles (:triangle-budget policy)))}))
 
 (defn foreground-kit
-  [{:keys [family tier entity-id seed origin radius ground-y]
+  "Resolve density descriptors. `:camera-facing-direction` is an optional X/Z
+   ground-plane vector from the composition origin/target toward the camera;
+   it is not the camera's forward/look direction. Omit it to preserve radial
+   placement."
+  [{:keys [family tier entity-id seed origin radius ground-y camera-facing-direction]
     :or {family :stylized tier :mid entity-id :foreground seed 0
          origin [0.0 0.0 0.0] radius 10.0 ground-y 0.0}}]
   (when-not (families family) (throw (ex-info "unsupported foreground family" {:family family})))
@@ -191,15 +222,20 @@
      :implementation-status :boundary-only :quality-claim :unsupported-future
      :geometry-library {} :camera-zones {} :material-layers [] :budget {:within-budget? true}}
     (let [policy (tier-policy tier) library (geometry-library seed)
-          foreground (mapv #(descriptor family seed % :foreground origin (* radius 0.62) ground-y)
+          facing-direction (normalize-facing-direction camera-facing-direction)
+          foreground (mapv #(descriptor family seed % :foreground origin (* radius 0.62) ground-y
+                                        facing-direction)
                            (range (:foreground-count policy)))
-          midground (mapv #(descriptor family seed (+ 100 %) :midground origin radius ground-y)
+          midground (mapv #(descriptor family seed (+ 100 %) :midground origin radius ground-y
+                                       facing-direction)
                           (range (:midground-count policy)))
           all (vec (concat foreground midground)) layers (material-layers family origin ground-y)]
       {:schema schema :family family :tier tier :entity-id entity-id
        :implementation-status :implemented :quality-claim :stylized-authored
        :geometry-contract {:space :normalized-unit :bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
                            :transform-scale-mode :world-size :double-scale-forbidden? true}
+       :placement-contract {:camera-facing-direction facing-direction
+                            :fallback :preserve-radial-layout}
        :geometry-library library
        :camera-zones {:foreground foreground :midground midground}
        :material-layers layers :budget (budget all layers library tier)})))
