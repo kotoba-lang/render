@@ -302,6 +302,26 @@
                        {:target :building-facade :space :facade-local :anchor :roof-line}
                        {:silhouette :stepped-roof :overhang 0.22})]))
 
+(defn- road-bounds-set [layer library]
+  (let [[positions _ _ _] (get-in library [(:geometry-ref layer) :mesh])
+        ;; Every disconnected road piece is authored as one cube (24 vertices).
+        components (partition (* 24 3) positions)
+        [ox oy oz] (get-in layer [:transform :offset])
+        [sx sy sz] (get-in layer [:transform :scale])]
+    (mapv (fn [component]
+            (let [world-positions (mapcat (fn [[x y z]]
+                                            [(+ ox (* sx x)) (+ oy (* sy y)) (+ oz (* sz z))])
+                                          (partition 3 component))]
+              (bounds world-positions)))
+          components)))
+
+(defn- attach-road-bounds-sets [layers library]
+  (mapv (fn [layer]
+          (if (#{:road-edge-wear :road-patch} (:material-role layer))
+            (assoc layer :bounds-set (road-bounds-set layer library))
+            layer))
+        layers))
+
 (defn- budget [descriptors layers library tier]
   (let [triangles (+ (reduce + 0 (map #(quot (count (nth (get-in library [(:geometry-ref %) :mesh]) 3)) 3)
                                       descriptors))
@@ -339,7 +359,8 @@
           midground (mapv #(descriptor family resolved-seed (+ 100 %) :midground origin radius ground-y
                                        facing-direction)
                           (range (:midground-count policy)))
-          all (vec (concat foreground midground)) layers (material-layers family origin ground-y)]
+          all (vec (concat foreground midground))
+          layers (attach-road-bounds-sets (material-layers family origin ground-y) library)]
       {:schema schema :family family :tier tier :entity-id entity-id
        :implementation-status :implemented :quality-claim :stylized-authored
        :geometry-contract {:space :normalized-unit :bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
