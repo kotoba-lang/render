@@ -270,20 +270,26 @@
       (is (= actual-triangles (get-in resolved [:budget :triangles]))))))
 
 (deftest royale-road-shoulders-are-piece-safe-measurable-and-rotation-independent
-  (let [subject {:min [-0.62 0.0 -0.45] :max [0.62 2.08 0.45]}
-        center [0.0 1.04 0.0]
-        camera-for (fn [[fx fz]]
-                     {:position [(* fx 8.062638063349993) 1.4028187128507497
-                                 (* fz 8.062638063349993)]
+  (let [subject {:min [-0.78 0.0 -0.62] :max [0.78 1.75 0.62]}
+        center [0.0 0.875 0.0]
+        rotated-direction [-0.573576436351046 -0.8191520442889919]
+        rotated-camera {:position [-3.890838275931745 1.1802561286003903
+                                   -5.5566929283278474]
+                        :look-at center :up [0.0 1.0 0.0] :vertical-fov-deg 42.0
+                        :viewport {:width 1280 :height 720}}
+        distance (#?(:clj Math/sqrt :cljs js/Math.sqrt)
+                  (+ (* 3.890838275931745 3.890838275931745)
+                     (* 5.5566929283278474 5.5566929283278474)))
+        front-camera {:position [0.0 1.1802561286003903 (- distance)]
                       :look-at center :up [0.0 1.0 0.0] :vertical-fov-deg 42.0
-                      :viewport {:width 1920 :height 1080}})]
-    (doseq [direction [[0.0 -1.0] [-0.573576436351046 -0.8191520442889919]]
+                      :viewport {:width 1280 :height 720}}]
+    (doseq [[direction camera] [[rotated-direction rotated-camera]
+                                [[0.0 -1.0] front-camera]]
             :let [resolved (density/foreground-kit
                             (assoc base :origin [0.0 0.0 0.0]
                                    :camera-facing-direction direction))
                   roads (filter #(#{:road-edge-wear :road-patch} (:material-role %))
                                 (:material-layers resolved))
-                  camera (camera-for direction)
                   subject-screen (let [{[x0 y0] :min [x1 y1] :max}
                                        (project-bounds camera subject)]
                                    {:min [(- x0 0.035) (- y0 0.035)]
@@ -292,6 +298,10 @@
                   projected (map #(project-bounds camera %) pieces)
                   union-area (lower-half-union-area projected)]]
       (is (= 2 (count roads)))
+      (is (every? (fn [{[x0 y0] :min [x1 y1] :max}]
+                    (and (<= 0.04 x0 x1 0.96) (<= 0.04 y0 y1 0.96)))
+                  projected)
+          (pr-str {:direction direction :projected projected}))
       (is (every? #(not (screen-intersects? subject-screen %)) projected)
           (pr-str {:direction direction :subject subject-screen :projected projected}))
       (is (>= union-area 0.040) (pr-str {:direction direction :union-area union-area}))

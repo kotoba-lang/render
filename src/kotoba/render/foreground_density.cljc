@@ -268,12 +268,12 @@
         lateral [fz (- fx)]
         rotation-y (#?(:clj Math/atan2 :cljs js/Math.atan2) fx fz)
         road-center (fn [side]
-                      [(+ x (* side 2.45 (first lateral)) (* 1.90 fx))
+                      [(+ x (* side 1.30 (first lateral)) (* 3.10 fx))
                        ground-y
-                       (+ z (* side 2.45 (second lateral)) (* 1.90 fz))])
+                       (+ z (* side 1.30 (second lateral)) (* 3.10 fz))])
         basis {:facing [fx fz] :lateral lateral
                :source (if camera-facing-direction :camera-facing-direction :legacy-fallback)}]
-    [(layer-descriptor family 0 :road-edge-wear (road-center 1.0) [1.2 0.01 2.2]
+    [(layer-descriptor family 0 :road-edge-wear (road-center 1.0) [1.2 0.01 0.8]
                        :road-breakup-islands 0.014
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center}
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center
@@ -281,7 +281,7 @@
                        {:mask :left-wear-shoulder :island-count 2 :center-safe? true
                         :complement :right-patch-shoulder :ground-plane-basis basis
                         :rotation-y rotation-y})
-     (layer-descriptor family 1 :road-patch (road-center -1.0) [1.2 0.01 2.2]
+     (layer-descriptor family 1 :road-patch (road-center -1.0) [1.2 0.01 0.8]
                        :road-patch-fragments 0.016
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center}
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center
