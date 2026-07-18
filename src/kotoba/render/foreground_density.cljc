@@ -103,15 +103,13 @@
     :road-breakup-islands
     (combine-mesh
      (mapv (fn [[scale offset]] (transform-mesh (mesh/cube) scale offset))
-           [[[0.24 0.10 0.20] [-0.34 0.0 -0.30]] [[0.18 0.08 0.28] [0.03 0.0 -0.28]]
-            [[0.22 0.09 0.16] [0.34 0.0 -0.12]] [[0.20 0.08 0.22] [-0.23 0.0 0.02]]
-            [[0.16 0.07 0.18] [0.18 0.0 0.05]] [[0.26 0.09 0.17] [-0.06 0.0 0.30]]
-            [[0.14 0.06 0.15] [0.37 0.0 0.31]]]))
+           [[[0.46 0.08 0.88] [-0.26 0.0 -0.02]]
+            [[0.44 0.07 0.82] [0.27 0.0 0.04]]]))
     :road-patch-fragments
     (combine-mesh
      (mapv (fn [[scale offset]] (transform-mesh (mesh/cube) scale offset))
-           [[[0.16 0.08 0.62] [-0.34 0.0 -0.12]] [[0.14 0.07 0.48] [0.02 0.0 0.22]]
-            [[0.22 0.09 0.38] [0.33 0.0 -0.28]] [[0.12 0.06 0.30] [0.40 0.0 0.30]]]))
+           [[[0.42 0.08 0.78] [-0.28 0.0 -0.08]]
+            [[0.48 0.09 0.86] [0.25 0.0 0.07]]]))
     :facade-window-bank
     (combine-mesh (mapv #(transform-mesh (mesh/cube) [0.24 0.86 0.34] [% 0.0 0.0])
                         [-0.34 0.0 0.34]))
@@ -255,7 +253,7 @@
       :material-role role :material (material-records role)
       :material-ref (material-ref family role (str "layer/" index))
       :transform {:offset offset :scale scale :scale-mode :world-size
-                  :rotation [0.0 0.0 0.0] :grounded? true}
+                  :rotation [0.0 (or (:rotation-y feature) 0.0) 0.0] :grounded? true}
       :collision {:mode :none :visual-only? true}
       :attachment attachment :attachment-eligibility eligibility :feature feature
       :layering {:projection (if road? :ground :facade)
@@ -264,22 +262,33 @@
       (not road?) (assoc :facade-layer-bounds resolved-bounds
                          :bounds-space :facade-local-to-building))))
 
-(defn- material-layers [family origin ground-y]
-  (let [[x _ z] origin]
-    [(layer-descriptor family 0 :road-edge-wear [(- x 1.25) ground-y z] [2.0 0.01 3.2]
+(defn- material-layers [family origin ground-y camera-facing-direction]
+  (let [[x _ z] origin
+        [fx fz] (or camera-facing-direction [0.0 -1.0])
+        lateral [fz (- fx)]
+        rotation-y (#?(:clj Math/atan2 :cljs js/Math.atan2) fx fz)
+        road-center (fn [side]
+                      [(+ x (* side 2.45 (first lateral)) (* 1.90 fx))
+                       ground-y
+                       (+ z (* side 2.45 (second lateral)) (* 1.90 fz))])
+        basis {:facing [fx fz] :lateral lateral
+               :source (if camera-facing-direction :camera-facing-direction :legacy-fallback)}]
+    [(layer-descriptor family 0 :road-edge-wear (road-center 1.0) [1.2 0.01 2.2]
                        :road-breakup-islands 0.014
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center}
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center
                         :subject-exclusion-required? true :eligible-regions #{:junction-center}}
-                       {:mask :left-wear-islands :island-count 7 :center-safe? true
-                        :complement :right-patch-fragments})
-     (layer-descriptor family 1 :road-patch [(+ x 1.25) ground-y z] [2.0 0.01 3.2]
+                       {:mask :left-wear-shoulder :island-count 2 :center-safe? true
+                        :complement :right-patch-shoulder :ground-plane-basis basis
+                        :rotation-y rotation-y})
+     (layer-descriptor family 1 :road-patch (road-center -1.0) [1.2 0.01 2.2]
                        :road-patch-fragments 0.016
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center}
                        {:target :road-surface :space :neighborhood-world :anchor :junction-center
                         :subject-exclusion-required? true :eligible-regions #{:junction-center}}
-                       {:mask :right-patch-fragments :island-count 4 :center-safe? true
-                        :complement :left-wear-islands})
+                       {:mask :right-patch-shoulder :island-count 2 :center-safe? true
+                        :complement :left-wear-shoulder :ground-plane-basis basis
+                        :rotation-y rotation-y})
      ;; Facade offsets are local to the consuming building facade. They are not
      ;; fake world coordinates relative to the neighborhood origin.
      (layer-descriptor family 2 :facade-base [0.0 0.0 0.05] [4.0 2.4 0.12] :crate 0.0
@@ -307,10 +316,13 @@
         ;; Every disconnected road piece is authored as one cube (24 vertices).
         components (partition (* 24 3) positions)
         [ox oy oz] (get-in layer [:transform :offset])
-        [sx sy sz] (get-in layer [:transform :scale])]
+        [sx sy sz] (get-in layer [:transform :scale])
+        {[fx fz] :facing [lx lz] :lateral} (get-in layer [:feature :ground-plane-basis])]
     (mapv (fn [component]
             (let [world-positions (mapcat (fn [[x y z]]
-                                            [(+ ox (* sx x)) (+ oy (* sy y)) (+ oz (* sz z))])
+                                            [(+ ox (* sx x lx) (* sz z fx))
+                                             (+ oy (* sy y))
+                                             (+ oz (* sx x lz) (* sz z fz))])
                                           (partition 3 component))]
               (bounds world-positions)))
           components)))
@@ -318,7 +330,13 @@
 (defn- attach-road-bounds-sets [layers library]
   (mapv (fn [layer]
           (if (#{:road-edge-wear :road-patch} (:material-role layer))
-            (assoc layer :bounds-set (road-bounds-set layer library))
+            (let [pieces (road-bounds-set layer library)
+                  all-points (mapcat (juxt :min :max) pieces)]
+              (assoc layer :bounds-set pieces
+                     :bounds {:min (mapv #(apply min (map (fn [point] (nth point %)) all-points))
+                                        (range 3))
+                              :max (mapv #(apply max (map (fn [point] (nth point %)) all-points))
+                                        (range 3))}))
             layer))
         layers))
 
@@ -360,7 +378,8 @@
                                        facing-direction)
                           (range (:midground-count policy)))
           all (vec (concat foreground midground))
-          layers (attach-road-bounds-sets (material-layers family origin ground-y) library)]
+          layers (attach-road-bounds-sets
+                  (material-layers family origin ground-y facing-direction) library)]
       {:schema schema :family family :tier tier :entity-id entity-id
        :implementation-status :implemented :quality-claim :stylized-authored
        :geometry-contract {:space :normalized-unit :bounds {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}

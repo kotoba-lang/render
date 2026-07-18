@@ -6,6 +6,58 @@
 (def base {:family :stylized :entity-id :junction-foreground :seed 8128
            :origin [4.0 0.0 -3.0] :radius 11.0 :ground-y 0.0})
 
+(defn- v- [a b] (mapv - a b))
+(defn- dot [a b] (reduce + (map * a b)))
+(defn- cross [[ax ay az] [bx by bz]]
+  [(- (* ay bz) (* az by)) (- (* az bx) (* ax bz)) (- (* ax by) (* ay bx))])
+(defn- normalize [v]
+  (let [length (#?(:clj Math/sqrt :cljs js/Math.sqrt) (dot v v))]
+    (mapv #(/ % length) v)))
+
+(defn- project-point [{:keys [position look-at up vertical-fov-deg viewport]} point]
+  (let [forward (normalize (v- look-at position))
+        right (normalize (cross up forward))
+        corrected-up (normalize (cross forward right))
+        relative (v- point position) depth (dot relative forward)
+        aspect (/ (double (:width viewport)) (:height viewport))
+        tan-half (#?(:clj Math/tan :cljs js/Math.tan)
+                  (* 0.5 vertical-fov-deg (/ #?(:clj Math/PI :cljs js/Math.PI) 180.0)))
+        ndc-x (/ (dot relative right) (* depth tan-half aspect))
+        ndc-y (/ (dot relative corrected-up) (* depth tan-half))]
+    [(+ 0.5 (* 0.5 ndc-x)) (- 0.5 (* 0.5 ndc-y))]))
+
+(defn- project-bounds [camera {mn :min mx :max}]
+  (let [points (for [x [(nth mn 0) (nth mx 0)]
+                     y [(nth mn 1) (nth mx 1)]
+                     z [(nth mn 2) (nth mx 2)]]
+                 (project-point camera [x y z]))]
+    {:min [(apply min (map first points)) (apply min (map second points))]
+     :max [(apply max (map first points)) (apply max (map second points))]}))
+
+(defn- screen-intersects? [{a-min :min a-max :max} {b-min :min b-max :max}]
+  (every? true? (map (fn [amn amx bmn bmx] (and (< amn bmx) (< bmn amx)))
+                     a-min a-max b-min b-max)))
+
+(defn- interval-union [intervals]
+  (second
+   (reduce (fn [[end total] [lo hi]]
+             (if (<= lo end) [(max end hi) (+ total (max 0.0 (- hi (max end lo))))]
+                 [hi (+ total (- hi lo))]))
+           [##-Inf 0.0] (sort-by first intervals))))
+
+(defn- lower-half-union-area [rects]
+  (let [clipped (keep (fn [{[x0 y0] :min [x1 y1] :max}]
+                        (let [lo (max 0.5 y0) hi (min 1.0 y1)]
+                          (when (< lo hi) {:min [x0 lo] :max [x1 hi]})))
+                      rects)
+        xs (sort (distinct (mapcat #(vector (get-in % [:min 0]) (get-in % [:max 0])) clipped)))]
+    (reduce + 0.0
+            (for [[x0 x1] (partition 2 1 xs)
+                  :let [mid (* 0.5 (+ x0 x1))
+                        active (filter #(<= (get-in % [:min 0]) mid (get-in % [:max 0])) clipped)]]
+              (* (- x1 x0) (interval-union (map #(vector (get-in % [:min 1])
+                                                         (get-in % [:max 1])) active)))))))
+
 (deftest actual-geometry-is-normalized-and-bounded
   (let [resolved (density/foreground-kit base)]
     (is (= {:min [-0.5 0.0 -0.5] :max [0.5 1.0 0.5]}
@@ -173,7 +225,7 @@
     (is (every? #(true? (get-in % [:feature :center-safe?])) roads))
     (is (every? #(= :final-world (:bounds-space %)) roads))
     (is (every? #(= 3 (count (:min (:bounds %)))) roads))
-    (is (= #{7 4} (set (map #(count (:bounds-set %)) roads))))
+    (is (= #{2} (set (map #(count (:bounds-set %)) roads))))
     (is (every? #(<= 2 (count (:bounds-set %))) roads))
     (is (every? (fn [road]
                   (every? #(= #{:min :max} (set (keys %))) (:bounds-set road)))
@@ -183,10 +235,14 @@
                                              [:geometry-library (:geometry-ref road) :mesh])
                   components (partition (* 24 3) positions)
                   [ox oy oz] (get-in road [:transform :offset])
-                  [sx sy sz] (get-in road [:transform :scale])]
+                  [sx sy sz] (get-in road [:transform :scale])
+                  {[fx fz] :facing [lx lz] :lateral}
+                  (get-in road [:feature :ground-plane-basis])]
             [component piece-bounds] (map vector components (:bounds-set road))
             [x y z] (partition 3 component)
-            :let [world [(+ ox (* sx x)) (+ oy (* sy y)) (+ oz (* sz z))]]]
+            :let [world [(+ ox (* sx x lx) (* sz z fx))
+                         (+ oy (* sy y))
+                         (+ oz (* sx x lz) (* sz z fz))]]]
       (is (every? true? (map <= (:min piece-bounds) world (:max piece-bounds)))))
     (doseq [road roads
             piece (:bounds-set road)]
@@ -203,8 +259,8 @@
     (is (< (value :facade-window) (value :facade-base) (value :facade-trim)))
     (is (= :stepped-roof (get-in by-role [:facade-roof :feature :silhouette])))
     (is (every? #(contains? (:geometry-library resolved) (:geometry-ref %)) layers))
-    (is (= 84 (quot (count (get-in resolved [:geometry-library :road-breakup-islands :mesh 3])) 3)))
-    (is (= 48 (quot (count (get-in resolved [:geometry-library :road-patch-fragments :mesh 3])) 3)))
+    (is (= 24 (quot (count (get-in resolved [:geometry-library :road-breakup-islands :mesh 3])) 3)))
+    (is (= 24 (quot (count (get-in resolved [:geometry-library :road-patch-fragments :mesh 3])) 3)))
     (is (= 36 (quot (count (get-in resolved [:geometry-library :facade-window-bank :mesh 3])) 3)))
     (let [all (concat (mapcat second (:camera-zones resolved)) layers)
           actual-triangles (reduce + (map #(quot (count (get-in resolved
@@ -212,6 +268,34 @@
                                                   3)
                                           all))]
       (is (= actual-triangles (get-in resolved [:budget :triangles]))))))
+
+(deftest royale-road-shoulders-are-piece-safe-measurable-and-rotation-independent
+  (let [subject {:min [-0.62 0.0 -0.45] :max [0.62 2.08 0.45]}
+        center [0.0 1.04 0.0]
+        camera-for (fn [[fx fz]]
+                     {:position [(* fx 8.062638063349993) 1.4028187128507497
+                                 (* fz 8.062638063349993)]
+                      :look-at center :up [0.0 1.0 0.0] :vertical-fov-deg 42.0
+                      :viewport {:width 1920 :height 1080}})]
+    (doseq [direction [[0.0 -1.0] [-0.573576436351046 -0.8191520442889919]]
+            :let [resolved (density/foreground-kit
+                            (assoc base :origin [0.0 0.0 0.0]
+                                   :camera-facing-direction direction))
+                  roads (filter #(#{:road-edge-wear :road-patch} (:material-role %))
+                                (:material-layers resolved))
+                  camera (camera-for direction)
+                  subject-screen (let [{[x0 y0] :min [x1 y1] :max}
+                                       (project-bounds camera subject)]
+                                   {:min [(- x0 0.035) (- y0 0.035)]
+                                    :max [(+ x1 0.035) (+ y1 0.035)]})
+                  pieces (mapcat :bounds-set roads)
+                  projected (map #(project-bounds camera %) pieces)
+                  union-area (lower-half-union-area projected)]]
+      (is (= 2 (count roads)))
+      (is (every? #(not (screen-intersects? subject-screen %)) projected)
+          (pr-str {:direction direction :subject subject-screen :projected projected}))
+      (is (>= union-area 0.040) (pr-str {:direction direction :union-area union-area}))
+      (is (= direction (get-in (first roads) [:feature :ground-plane-basis :facing]))))))
 
 (deftest photoreal-boundary-is-future
   (let [resolved (density/foreground-kit (assoc base :family :photoreal))]
