@@ -122,7 +122,7 @@
 
 (deftest layering-is-renderer-consumable-not-metadata-only
   (let [layers (:material-layers (density/foreground-kit base))]
-    (is (= #{:road-breakup :facade-base :facade-trim :facade-window
+    (is (= #{:road-edge-wear :road-patch :facade-base :facade-trim :facade-window
              :facade-door :facade-roof}
            (set (map :material-role layers))))
     (is (every? map? (map :material layers)))
@@ -162,14 +162,20 @@
   (let [resolved (density/foreground-kit base)
         layers (:material-layers resolved)
         by-role (into {} (map (juxt :material-role identity) layers))
-        road (by-role :road-breakup)
-        facade (remove #(= :road-breakup (:material-role %)) layers)
+        roads (filter #(#{:road-edge-wear :road-patch} (:material-role %)) layers)
+        facade (remove #(#{:road-edge-wear :road-patch} (:material-role %)) layers)
         value (fn [role] (/ (reduce + (take 3 (get-in by-role [role :material :base-color]))) 3.0))]
-    (is (true? (get-in road [:attachment-eligibility :subject-exclusion-required?])))
-    (is (= #{:junction-center} (get-in road [:attachment-eligibility :eligible-regions])))
-    (is (true? (get-in road [:feature :center-safe?])))
-    (is (= :final-world (:bounds-space road)))
-    (is (= 3 (count (:min (:bounds road)))))
+    (is (= #{:road-edge-wear :road-patch} (set (map :material-role roads))))
+    (is (= 2 (count (set (map :geometry-ref roads)))))
+    (is (every? #(true? (get-in % [:attachment-eligibility :subject-exclusion-required?])) roads))
+    (is (every? #(= #{:junction-center}
+                    (get-in % [:attachment-eligibility :eligible-regions])) roads))
+    (is (every? #(true? (get-in % [:feature :center-safe?])) roads))
+    (is (every? #(= :final-world (:bounds-space %)) roads))
+    (is (every? #(= 3 (count (:min (:bounds %)))) roads))
+    (let [[left right] (sort-by #(get-in % [:bounds :min 0]) roads)]
+      (is (< (get-in left [:bounds :max 0]) (get-in right [:bounds :min 0]))))
+    (is (<= 3 (count facade)))
     (is (every? #(= (:attachment %) (:attachment-eligibility %)) facade))
     (is (every? #(= :facade-local-to-building (:bounds-space %)) facade))
     (is (every? #(= 3 (count (:min (:facade-layer-bounds %)))) facade))
@@ -179,6 +185,7 @@
     (is (= :stepped-roof (get-in by-role [:facade-roof :feature :silhouette])))
     (is (every? #(contains? (:geometry-library resolved) (:geometry-ref %)) layers))
     (is (= 84 (quot (count (get-in resolved [:geometry-library :road-breakup-islands :mesh 3])) 3)))
+    (is (= 48 (quot (count (get-in resolved [:geometry-library :road-patch-fragments :mesh 3])) 3)))
     (is (= 36 (quot (count (get-in resolved [:geometry-library :facade-window-bank :mesh 3])) 3)))
     (let [all (concat (mapcat second (:camera-zones resolved)) layers)
           actual-triangles (reduce + (map #(quot (count (get-in resolved
