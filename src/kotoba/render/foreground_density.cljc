@@ -47,6 +47,14 @@
    :rock {:size [0.68 0.42 0.56] :role :trunk}
    :debris {:size [0.62 0.16 0.34] :role :utility}})
 
+(def ^:private foreground-kind-size
+  {:shrub [0.62 0.45 0.55]
+   :grass [0.38 0.28 0.34]
+   :crate [0.38 0.34 0.38]
+   :bollard [0.08 0.14 0.08]
+   :rock [0.42 0.26 0.36]
+   :debris [0.35 0.09 0.20]})
+
 (def material-records
   {:foliage {:base-color [0.16 0.42 0.20 1.0] :metallic 0.0 :roughness 0.88}
    :grass {:base-color [0.22 0.48 0.16 1.0] :metallic 0.0 :roughness 0.92}
@@ -205,29 +213,34 @@
         r (* radius (+ 0.18 (* 0.78 (unit seed (+ 200 index)))))
         cos #?(:clj Math/cos :cljs js/Math.cos) sin #?(:clj Math/sin :cljs js/Math.sin)
         [ox _ oz] origin
-        scale-factor (+ 0.86 (* 0.28 (unit seed (+ 300 index))))
-        size (mapv #(* % scale-factor) (:size (kind-profile kind)))
+        foreground-basis? (and (= zone :foreground) camera-facing-direction)
+        scale-factor (if foreground-basis?
+                       (+ 0.56 (* 0.11 (unit seed (+ 300 index))))
+                       (+ 0.86 (* 0.28 (unit seed (+ 300 index)))))
+        base-size (if foreground-basis? (foreground-kind-size kind) (:size (kind-profile kind)))
+        size (mapv #(* % scale-factor) base-size)
         screen-side (if (even? index) :left :right)
         region (keyword (str (name zone) "-" (name screen-side)))
         cluster-id (keyword (str (name zone) "-" (name screen-side) "-cluster"))
         radial [(* r (cos angle)) (* r (sin angle))]
-        camera-facing? (and (= zone :foreground) (= cluster-role :vegetation)
-                            camera-facing-direction)
-        [dx dz] (if camera-facing?
+        [dx dz] (if foreground-basis?
                   (let [[fx fz] camera-facing-direction
-                        projection (+ (* (first radial) fx) (* (second radial) fz))
-                        lateral [(- (first radial) (* projection fx))
-                                 (- (second radial) (* projection fz))]
-                        facing-depth (max (* radius 0.18)
-                                          (#?(:clj Math/abs :cljs js/Math.abs) projection))]
-                    [(+ (first lateral) (* facing-depth fx))
-                     (+ (second lateral) (* facing-depth fz))])
+                        [lx lz] [fz (- fx)]
+                        side-sign (if (= screen-side :left) 1.0 -1.0)
+                        lateral-distance (+ 1.25 (* 0.85 (unit seed (+ 500 index))))
+                        facing-depth (+ 2.70 (* 0.55 (unit seed (+ 600 index))))]
+                    [(+ (* side-sign lateral-distance lx) (* facing-depth fx))
+                     (+ (* side-sign lateral-distance lz) (* facing-depth fz))])
                   radial)]
     {:descriptor/id (keyword (str (name zone) "-" (name kind) "-" index))
      :camera-zone zone :composition-region region :screen-side screen-side
      :ground-contact-screen-y-range (ground-contact-screen-y-ranges zone)
      :screen-extent-range (screen-extent-ranges kind)
      :camera-facing-direction camera-facing-direction
+     :ground-plane-basis (when foreground-basis?
+                           {:facing camera-facing-direction
+                            :lateral [(second camera-facing-direction)
+                                      (- (first camera-facing-direction))]})
      :cluster-id cluster-id :cluster-role cluster-role
      :kind kind :geometry-variant geometry-variant
      :geometry-ref (geometry-ref kind geometry-variant)

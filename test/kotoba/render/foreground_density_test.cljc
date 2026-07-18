@@ -34,6 +34,22 @@
     {:min [(apply min (map first points)) (apply min (map second points))]
      :max [(apply max (map first points)) (apply max (map second points))]}))
 
+(defn- descriptor-world-bounds [descriptor geometry]
+  (let [[positions _ _ _] (:mesh geometry)
+        [sx sy sz] (get-in descriptor [:transform :scale])
+        [ox oy oz] (get-in descriptor [:transform :offset])
+        angle (get-in descriptor [:transform :rotation 1])
+        cos #?(:clj (Math/cos angle) :cljs (js/Math.cos angle))
+        sin #?(:clj (Math/sin angle) :cljs (js/Math.sin angle))
+        world (mapcat (fn [[x y z]]
+                        (let [x (* sx x) z (* sz z)]
+                          [(+ ox (* cos x) (* sin z))
+                           (+ oy (* sy y))
+                           (+ oz (- (* cos z) (* sin x)))]))
+                      (partition 3 positions))]
+    {:min (mapv #(apply min (map (fn [point] (nth point %)) (partition 3 world))) (range 3))
+     :max (mapv #(apply max (map (fn [point] (nth point %)) (partition 3 world))) (range 3))}))
+
 (defn- screen-intersects? [{a-min :min a-max :max} {b-min :min b-max :max}]
   (every? true? (map (fn [amn amx bmn bmx] (and (< amn bmx) (< bmn amx)))
                      a-min a-max b-min b-max)))
@@ -306,6 +322,76 @@
           (pr-str {:direction direction :subject subject-screen :projected projected}))
       (is (>= union-area 0.040) (pr-str {:direction direction :union-area union-area}))
       (is (= direction (get-in (first roads) [:feature :ground-plane-basis :facing]))))))
+
+(deftest royale-foreground-basis-produces-safe-diverse-lower-corner-candidates
+  (let [subject {:min [-0.78 0.0 -0.62] :max [0.78 1.75 0.62]}
+        center [0.0 0.875 0.0]
+        rotated-direction [-0.573576436351046 -0.8191520442889919]
+        rotated-camera {:position [-3.890838275931745 1.1802561286003903
+                                   -5.5566929283278474]
+                        :look-at center :up [0.0 1.0 0.0] :vertical-fov-deg 42.0
+                        :viewport {:width 1280 :height 720}}
+        distance (#?(:clj Math/sqrt :cljs js/Math.sqrt)
+                  (+ (* 3.890838275931745 3.890838275931745)
+                     (* 5.5566929283278474 5.5566929283278474)))
+        front-camera {:position [0.0 1.1802561286003903 (- distance)]
+                      :look-at center :up [0.0 1.0 0.0] :vertical-fov-deg 42.0
+                      :viewport {:width 1280 :height 720}}]
+    (doseq [[direction camera] [[rotated-direction rotated-camera]
+                                [[0.0 -1.0] front-camera]]
+            :let [resolved (density/foreground-kit
+                            (assoc base :tier :hero :origin [0.0 0.0 0.0]
+                                   :camera-facing-direction direction))
+                  subject-screen (let [{[x0 y0] :min [x1 y1] :max}
+                                       (project-bounds camera subject)]
+                                   {:min [(- x0 0.035) (- y0 0.035)]
+                                    :max [(+ x1 0.035) (+ y1 0.035)]})
+                  measured
+                  (mapv (fn [descriptor]
+                          (let [world (descriptor-world-bounds
+                                       descriptor (get-in resolved
+                                                          [:geometry-library
+                                                           (:geometry-ref descriptor)]))
+                                screen (project-bounds camera world)
+                                [x0 y0] (:min screen) [x1 y1] (:max screen)
+                                center-x (* 0.5 (+ x0 x1))
+                                contact-y (second (project-point
+                                                   camera
+                                                   [(* 0.5 (+ (get-in world [:min 0])
+                                                              (get-in world [:max 0])))
+                                                    (get-in world [:min 1])
+                                                    (* 0.5 (+ (get-in world [:min 2])
+                                                              (get-in world [:max 2])))]))
+                                extent (max (- x1 x0) (- y1 y0))
+                                [extent-min extent-max] (:screen-extent-range descriptor)
+                                [contact-min contact-max] (:ground-contact-screen-y-range descriptor)
+                                expected-left? (= :left (:screen-side descriptor))
+                                accepted? (and (<= 0.04 x0 x1 0.96) (<= 0.04 y0 y1 0.96)
+                                               (not (screen-intersects? subject-screen screen))
+                                               (= expected-left? (< center-x 0.5))
+                                               (<= contact-min contact-y contact-max)
+                                               (<= extent-min extent extent-max))]
+                            (assoc descriptor
+                                   :measured-screen screen
+                                   :measured-center-x center-x
+                                   :measured-contact-y contact-y
+                                   :measured-extent extent
+                                   :accepted? accepted?)))
+                        (get-in resolved [:camera-zones :foreground]))]]
+      (doseq [side [:left :right]
+              :let [accepted (filter #(and (:accepted? %) (= side (:screen-side %))) measured)
+                    rects (map :measured-screen accepted)
+                    cell (if (= side :left)
+                           {:min [0.0 0.75] :max [0.25 1.0]}
+                           {:min [0.75 0.75] :max [1.0 1.0]})]]
+        (is (<= 3 (count accepted))
+            (pr-str {:direction direction :side side :accepted accepted
+                     :candidates (filter #(= side (:screen-side %)) measured)}))
+        (is (= #{:vegetation :solid-prop} (set (map :cluster-role accepted))))
+        (is (<= 2 (count (set (map :kind accepted)))))
+        (is (<= 2 (count (set (map :geometry-variant accepted)))))
+        (is (some #(screen-intersects? cell %) rects))
+        (is (>= (lower-half-union-area rects) 0.018))))))
 
 (deftest photoreal-boundary-is-future
   (let [resolved (density/foreground-kit (assoc base :family :photoreal))]
