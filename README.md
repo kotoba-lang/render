@@ -388,7 +388,14 @@ that intent against actual camera projection. Authoritative selection hints are
 top-level `:ground-contact-screen-y-range`, `:screen-extent-range`,
 `:cluster-id`, and `:cluster-role`. Foreground candidates use the normalized
 screen ground band `[0.58,0.90]`, midground uses `[0.42,0.72]`, and per-kind
-extent ranges prevent isolated oversized blobs or unreadably thin props.
+extent ranges prevent isolated oversized blobs or unreadably thin props. The
+grass range permits readable blade clusters through `0.11` screen extent while
+shrubs remain capped at `0.16`. Supplying normalized-or-normalizable
+`:camera-facing-direction [x z]`—the ground-plane direction from the composition
+origin/target **toward the camera**, not camera-forward from camera to look-at—
+moves foreground vegetation into the near half-space independent of world
+orientation. This keeps grounded clusters in the lower frame without weakening
+the shared contact gate. Omitting it preserves the deterministic radial layout.
 Deterministic paired clusters give every left/right hero and mid-tier foreground
 region both vegetation and a solid prop/rock. Material layers count toward the
 same actual instance budget. Road layers attach in `:neighborhood-world` space;

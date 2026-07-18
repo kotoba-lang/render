@@ -58,7 +58,7 @@
     (is (every? #(zero? (get-in % [:transform :offset 1])) descriptors))))
 
 (deftest selection-intent-has-bands-extents-and-mixed-foreground-clusters
-  (let [extent-ranges {:shrub [0.06 0.16] :grass [0.025 0.08]
+  (let [extent-ranges {:shrub [0.06 0.16] :grass [0.025 0.11]
                        :crate [0.04 0.10] :bollard [0.018 0.05]
                        :rock [0.04 0.11] :debris [0.025 0.075]}]
     (doseq [tier [:hero :mid :background]
@@ -81,6 +81,43 @@
                 (vals (group-by :cluster-id side-descriptors))))
     (is (some #{:shrub :grass} (map :kind side-descriptors)))
     (is (some #{:crate :bollard :rock :debris} (map :kind side-descriptors)))))
+
+(deftest foreground-vegetation-is-authored-in-camera-facing-depth
+  (doseq [tier [:hero :mid]
+          :let [resolved (density/foreground-kit (assoc base :tier tier
+                                                        :camera-facing-direction [0.0 -4.0]))
+                vegetation (filter #(= :vegetation (:cluster-role %))
+                                   (get-in resolved [:camera-zones :foreground]))]
+          side [:left :right]
+          :let [side-candidates (filter #(= side (:screen-side %)) vegetation)]]
+    (is (seq side-candidates))
+    (is (every? #(<= (get-in % [:transform :offset 2])
+                     (- (nth (:origin base) 2) (* (:radius base) 0.62 0.18)))
+                side-candidates))
+    (is (every? #(= [0.58 0.90] (:ground-contact-screen-y-range %))
+                side-candidates))
+    (is (every? #(= (if (= :grass (:kind %)) [0.025 0.11] [0.06 0.16])
+                    (:screen-extent-range %))
+                side-candidates))))
+
+(deftest camera-facing-direction-is-generic-normalized-and-optional
+  (let [fallback (density/foreground-kit base)
+        plus-x (density/foreground-kit (assoc base :camera-facing-direction [8.0 0.0]))
+        vegetation (filter #(= :vegetation (:cluster-role %))
+                           (get-in plus-x [:camera-zones :foreground]))
+        minimum-facing-depth (* (:radius base) 0.62 0.18)]
+    (is (= [1.0 0.0] (get-in plus-x [:placement-contract :camera-facing-direction])))
+    (is (= :preserve-radial-layout (get-in fallback [:placement-contract :fallback])))
+    (is (nil? (get-in fallback [:placement-contract :camera-facing-direction])))
+    (is (every? #(>= (+ 1.0e-9 (- (get-in % [:transform :offset 0])
+                                  (nth (:origin base) 0)))
+                     minimum-facing-depth)
+                vegetation))
+    (is (every? #(= [1.0 0.0] (:camera-facing-direction %)) vegetation))
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (density/foreground-kit (assoc base :camera-facing-direction [0.0 0.0]))))
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (density/foreground-kit (assoc base :camera-facing-direction [1.0]))))))
 
 (deftest layering-is-renderer-consumable-not-metadata-only
   (let [layers (:material-layers (density/foreground-kit base))]
