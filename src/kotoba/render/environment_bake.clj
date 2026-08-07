@@ -8,6 +8,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [kotoba.render.environment :as environment]
+            [kotoba.render.sampling :as sampling]
             [kotoba.render.texture :as texture])
   (:import [java.util.zip GZIPInputStream GZIPOutputStream]))
 
@@ -31,14 +32,6 @@
 (defn- normalize [v]
   (let [length (Math/sqrt (max 1.0e-20 (dot v v)))] (mul v (/ length))))
 
-(defn- radical-inverse-vdc [bits]
-  (loop [n (long bits) denominator 2.0 result 0.0]
-    (if (zero? n)
-      result
-      (recur (unsigned-bit-shift-right n 1) (* denominator 2.0)
-             (+ result (if (odd? n) (/ denominator) 0.0))))))
-
-(defn- hammersley [i n] [(/ (+ i 0.5) n) (radical-inverse-vdc i)])
 
 (defn- basis [n]
   (let [up (if (< (Math/abs (nth n 1)) 0.999) [0.0 1.0 0.0] [1.0 0.0 0.0])
@@ -76,7 +69,7 @@
   ;; Cosine importance sampling: integral/pi is simply the average radiance.
   (mul (reduce add [0.0 0.0 0.0]
                (for [i (range samples)]
-                 (studio-radiance (tangent->world (cosine-direction (hammersley i samples)) normal))))
+                 (studio-radiance (tangent->world (cosine-direction (sampling/hammersley i samples)) normal))))
        (/ samples)))
 
 (defn- ggx-half [xi roughness]
@@ -93,7 +86,7 @@
   (let [view normal
         [sum weight]
         (reduce (fn [[acc w] i]
-                  (let [half (tangent->world (ggx-half (hammersley i samples) roughness) normal)
+                  (let [half (tangent->world (ggx-half (sampling/hammersley i samples) roughness) normal)
                         light (normalize (reflect view half))
                         ndl (max 0.0 (dot normal light))]
                     (if (pos? ndl) [(add acc (mul (studio-radiance light) ndl)) (+ w ndl)] [acc w])))
@@ -111,7 +104,7 @@
       (mul
        (reduce
         (fn [[a b] i]
-          (let [half (ggx-half (hammersley i samples) roughness)
+          (let [half (ggx-half (sampling/hammersley i samples) roughness)
                 light (normalize (reflect view half))
                 ndl (max 0.0 (nth light 2)) ndh (max 0.0 (nth half 2))
                 vdh (max 0.0 (dot view half))]
