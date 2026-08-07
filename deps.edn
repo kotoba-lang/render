@@ -2,9 +2,22 @@
  :aliases
  {:ibl-bake {:main-opts ["-m" "kotoba.render.environment-bake"]}
   :probe-bake {:main-opts ["-m" "kotoba.render.probe-bake"]}
+  ;; kami-nv-compat is a TEST-ONLY dependency, and deliberately so. Its
+  ;; `kami-rt.bvh` namespace (Moller-Trumbore + median-split BVH + closest-hit)
+  ;; is the mesh tracer `kotoba.render.probe-bake` accepts through its injected
+  ;; `visible?` seam. Proving the seam works with a real mesh does not require
+  ;; shipping that dependency: nothing under :paths refers to it, so `render`
+  ;; stays consumable without pulling an engine repo in. Whether a production
+  ;; mesh bake should take the dependency for real is a separate decision.
+  ;;
+  ;; Safe as an edge: kami-nv-compat depends only on io-multiformats (no cycle
+  ;; back to render), and bvh.cljc has no :require of its own at all.
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
-                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                      io.github.kotoba-lang/kami-nv-compat
+                      {:git/url "https://github.com/kotoba-lang/kami-nv-compat.git"
+                       :git/sha "bc38b205cefca4f61bff5d631717eaa5653e2169"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test}
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
