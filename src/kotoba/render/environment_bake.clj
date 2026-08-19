@@ -7,6 +7,7 @@
    load/upload the result; no convolution happens during a frame."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [kotoba.render.cubemap :as cubemap]
             [kotoba.render.environment :as environment]
             [kotoba.render.sampling :as sampling]
             [kotoba.render.texture :as texture])
@@ -40,15 +41,6 @@
 
 (defn- tangent->world [[x y z] n]
   (let [[t b] (basis n)] (normalize (add (add (mul t x) (mul b y)) (mul n z)))))
-
-(defn- cube-direction [face size x y]
-  (let [u (- (* 2.0 (/ (+ x 0.5) size)) 1.0)
-        v (- 1.0 (* 2.0 (/ (+ y 0.5) size)))]
-    (normalize
-     (case face
-       :+x [1.0 v (- u)] :-x [-1.0 v u]
-       :+y [u 1.0 (- v)] :-y [u -1.0 v]
-       :+z [u v 1.0] :-z [(- u) v -1.0]))))
 
 (defn studio-radiance
   "Analytic, seam-free daylight environment: cool sky, warm ground and a broad
@@ -120,13 +112,13 @@
   (conj (mapv #(long (Math/round (* 255.0 (clamp % 0.0 1.0)))) rgb) 255))
 
 (defn- bake-face [size pixel-fn face]
-  (vec (mapcat (fn [y] (mapcat (fn [x] (rgba (pixel-fn (cube-direction face size x y))))
+  (vec (mapcat (fn [y] (mapcat (fn [x] (rgba (pixel-fn (cubemap/direction face size x y))))
                                 (range size)))
                (range size))))
 
 (defn- bake-cube-level [size pixel-fn]
   (environment/cube-level size
-    (into {} (for [face environment/cube-faces]
+    (into {} (for [face cubemap/faces]
                [face (bake-face size pixel-fn face)]))))
 
 (defn bake-environment

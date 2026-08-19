@@ -65,6 +65,7 @@ platform.
 | `kotoba.render.raytrace` | `raytrace.rs` | `RtGlobals` uniform constructor (the CPU-side data the RT compute pass uploads) |
 | `kotoba.render.bits` | (new) | Shared byte/IEEE754 helpers (`f32-le`, `half->f32`, `i24-le`, `i32-bits->f32`, ...) used across the loaders/decoders above |
 | `kotoba.render.material` | shared contract | Validated metallic/roughness PBR material data and fixed-shape GPU uniform packing |
+| `kotoba.render.cubemap` | (new) | Cube-face direction math (extracted from `environment-bake`, which now calls it) + equirectangular panorama -> six RGBA8 cube faces. Verified against the D3D/GL cube face-selection table, so a face cannot be silently mirrored |
 | `kotoba.render.environment-bake` | offline tool | Deterministic irradiance convolution, GGX specular prefilter and split-sum BRDF LUT bake to gzip EDN |
 | `kotoba.render.shadow` | shared contract | Cascaded directional-shadow split, atlas, bias, and pass planning |
 | `kotoba.render.post-process` | shared contract | HDR frame graphs: SSAO/SSR/bloom/DoF/motion blur/tone mapping/AA/color grading |
