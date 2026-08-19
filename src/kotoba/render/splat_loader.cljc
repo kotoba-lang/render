@@ -56,6 +56,25 @@
 ;; PLY (ASCII + binary_little_endian)
 ;; ---------------------------------------------------------------------------
 
+(def ^:private end-header
+  "`end_header\n` as bytes.
+
+  Not `(map int \"end_header\\n\")`: iterating a string gives Characters on the
+  JVM and one-character strings in ClojureScript, where `(int \"e\")` is 0. That
+  made the needle eleven zero bytes, and `find-bytes` then located the first
+  run of eleven zeroes in the FILE -- which in a real splat PLY is the `nx ny
+  nz` normals of some vertex, since those are written as 0.0. The header still
+  parsed (it is at the front), so the vertex count and the property list came
+  out right and only the body offset was wrong: every float was read from the
+  middle of another float, and the loop ran out of bytes one vertex early.
+
+  Measured 2026-08-19 on a 77,024-vertex file this fleet produced: 77,023
+  splats, positions around 1e-14 and opacities around 7.8e18. Nothing threw.
+  The JVM suite could not see any of it -- `splat_loader_test.clj` is `.clj`,
+  so the ClojureScript path had never been run. `png.encode` had the same bug
+  for the same reason on the same day."
+  (mapv #?(:clj int :cljs #(.charCodeAt % 0)) "end_header\n"))
+
 (defn- find-bytes [bytes needle]
   (let [n (count bytes) m (count needle)]
     (loop [i 0]
@@ -74,7 +93,7 @@
    (channel-major in the file, rearranged to coefficient-major in
    `:sh-rest`, matching the Rust source)."
   [bytes]
-  (let [sep (map int "end_header\n")
+  (let [sep end-header
         header-end (find-bytes bytes sep)]
     (when (nil? header-end)
       (throw (ex-info "invalid PLY header" {:type :invalid-header})))
