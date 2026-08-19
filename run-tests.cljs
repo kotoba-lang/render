@@ -10,6 +10,7 @@
   (:require [cljs.test :refer [run-tests]]
             [kotoba.render.cubemap-test]
             [kotoba.render.splat-loader-portable-test]
+            [kotoba.render.splat-raster-test]
             [kotoba.render.splat-test]))
 
 (defmethod cljs.test/report [:cljs.test/default :end-run-tests] [m]
@@ -18,4 +19,5 @@
 
 (run-tests 'kotoba.render.cubemap-test
            'kotoba.render.splat-loader-portable-test
+           'kotoba.render.splat-raster-test
            'kotoba.render.splat-test)
