@@ -23,13 +23,40 @@
 ;; base64 (data: URI payload)
 ;; ---------------------------------------------------------------------------
 
+;; Code points as literals, and `char-code` instead of `int`.
+;;
+;; `(int \A)` is 65 on the JVM and 0 in ClojureScript -- `cljs.core/int` is
+;; `(bit-or x 0)`, and `"A" | 0` is 0. Iterating a string gives Characters on
+;; the JVM and one-character strings in ClojureScript, so `(int (first chars))`
+;; was 0 for EVERY character. `(= c (int \=))` then read `0 = 0` -> true, so
+;; every byte was skipped as padding and `base64-decode` returned `[]` for all
+;; input on ClojureScript. It threw nothing: a glTF `data:` URI simply
+;; decoded to an empty buffer.
+;;
+;; This is the defect `splat-loader/end-header` documents (2026-08-19), in the
+;; file next to it. It survived because `gltf_test.cljc` was `.cljc` and
+;; `run-tests.cljs` named four namespaces out of thirty-nine, so the
+;; ClojureScript path was never run here. Measured 2026-08-24.
+(def ^:private code-A 65)
+(def ^:private code-Z 90)
+(def ^:private code-a 97)
+(def ^:private code-z 122)
+(def ^:private code-0 48)
+(def ^:private code-9 57)
+(def ^:private code-plus 43)
+(def ^:private code-slash 47)
+(def ^:private code-eq 61)
+
+(defn- char-code [c]
+  #?(:clj (int c) :cljs (.charCodeAt c 0)))
+
 (defn- b64-val [c]
   (cond
-    (and (>= c (int \A)) (<= c (int \Z))) (- c (int \A))
-    (and (>= c (int \a)) (<= c (int \z))) (+ (- c (int \a)) 26)
-    (and (>= c (int \0)) (<= c (int \9))) (+ (- c (int \0)) 52)
-    (= c (int \+)) 62
-    (= c (int \/)) 63
+    (and (>= c code-A) (<= c code-Z)) (- c code-A)
+    (and (>= c code-a) (<= c code-z)) (+ (- c code-a) 26)
+    (and (>= c code-0) (<= c code-9)) (+ (- c code-0) 52)
+    (= c code-plus) 62
+    (= c code-slash) 63
     :else nil))
 
 (defn- ascii-whitespace? [c]
@@ -43,8 +70,8 @@
   (loop [chars (seq s) acc 0 bits-n 0 out []]
     (if (empty? chars)
       out
-      (let [c (int (first chars))]
-        (if (or (= c (int \=)) (ascii-whitespace? c))
+      (let [c (char-code (first chars))]
+        (if (or (= c code-eq) (ascii-whitespace? c))
           (recur (rest chars) acc bits-n out)
           (let [v (b64-val c)]
             (if (nil? v)

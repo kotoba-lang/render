@@ -280,8 +280,14 @@
 (defn- u32-bytes [v]
   [(bit-and v 0xff) (bit-and (bit-shift-right v 8) 0xff)
    (bit-and (bit-shift-right v 16) 0xff) (bit-and (bit-shift-right v 24) 0xff)])
+;; `(bit-shift-right v 32)` is v on ClojureScript: JS shift counts are taken
+;; mod 32, so `104 >> 32` is 104, not 0. This helper therefore wrote the LOW
+;; dword into the HIGH dword of every u64 field, and `decode-ktx2` read a
+;; level offset of 104 + 104*2^32 and threw `:truncated`. `quot`/`mod` are
+;; arithmetic on both runtimes, and are what `basisu/u64-le` already uses to
+;; go the other way (`* 0x100000000`). Measured 2026-08-24.
 (defn- u64-bytes [v]
-  (into (u32-bytes (bit-and v 0xffffffff)) (u32-bytes (bit-shift-right v 32))))
+  (into (u32-bytes (mod v 0x100000000)) (u32-bytes (quot v 0x100000000))))
 
 (deftest ktx2-container-roundtrip
   ;; Build a minimal 8x8 UASTC KTX2 (2x2 blocks, supercompression none) from
