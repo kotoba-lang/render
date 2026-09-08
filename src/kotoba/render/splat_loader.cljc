@@ -10,7 +10,7 @@
    `java.util.zip.GZIPInputStream` (`#?(:clj ...)`); on ClojureScript it
    throws — the reference `flate2` crate has no zero-dep JS equivalent in
    this port, so SPZ loading is JVM-only for now."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba.render.bits :as bits]
             [kotoba.render.splat :as splat]
             #?(:clj [clojure.java.io :as io])))
