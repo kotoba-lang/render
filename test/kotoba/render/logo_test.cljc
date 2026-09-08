@@ -1,6 +1,6 @@
 (ns kotoba.render.logo-test
   "Ported from kami-render/src/logo.rs's #[cfg(test)] mod tests."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]
             [kotoba.render.logo :as logo]))
 

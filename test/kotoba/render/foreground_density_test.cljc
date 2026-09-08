@@ -1,6 +1,6 @@
 (ns kotoba.render.foreground-density-test
   (:require [clojure.test :refer [deftest is]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kotoba.render.foreground-density :as density]))
 
 (def base {:family :stylized :entity-id :junction-foreground :seed 8128
