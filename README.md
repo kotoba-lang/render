@@ -74,7 +74,7 @@ platform.
 | `kotoba.render.quality` | shared contract | Versioned mobile/balanced/high/cinematic plans for SDK, Studio, and backends |
 | `kotoba.render.uastc` + `kotoba.render.basisu` | `basisu.rs` + `uastc_tables.rs` + `uastc_vectors.rs` | The **UASTC (Universal ASTC) LDR 4×4 block decoder** — a faithful `unpack_uastc` port (Huffman mode table, subset/partition patterns, dual-plane, trit/quint BISE endpoint decode, ASTC endpoint unquantization + weight interpolation) — plus KTX2 container parsing (`KHR_texture_basisu`, UASTC-only; ETC1S reported unsupported). Lookup tables machine-extracted verbatim from the Rust source. Validated bit-exact against the Rust source's own reference-encoder vectors (`uastc_vectors.rs`) — **see the UASTC mode-coverage note below** |
 
-`clojure -M:test` — **66 tests, 1068 assertions, 0 failures.** Several suites
+`kbb -M:test` — **66 tests, 1068 assertions, 0 failures.** Several suites
 (`meshopt_test`, `splat_loader_test`, `uastc_test`) reuse the *exact byte
 fixtures* the Rust source says were produced by the real reference encoders
 (`zeux/meshoptimizer` C++, Niantic SPZ, basis_universal), so passing them is a
@@ -177,7 +177,7 @@ bytes. Generate a production-sized analytic studio environment offline rather
 than checking thousands of handwritten integers into a scene:
 
 ```bash
-clojure -M:ibl-bake --out target/ibl/studio-pbr-environment.edn.gz
+kbb -M:ibl-bake --out target/ibl/studio-pbr-environment.edn.gz
 ```
 
 The deterministic defaults produce a daylight-balanced 32px diffuse irradiance cube, a 128px
@@ -204,8 +204,8 @@ analytic seam-free source make identical configuration produce identical
 bytes across runs.
 
 ```bash
-clojure -M:test     # full portable + bake suite
-clojure -M:lint     # clj-kondo, 0 errors/warnings
+kbb -M:test     # full portable + bake suite
+kbb -M:lint     # clj-kondo, 0 errors/warnings
 ```
 
 ## Portable combat-character silhouettes
