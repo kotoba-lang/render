@@ -35,7 +35,7 @@
 ;;
 ;; This is the defect `splat-loader/end-header` documents (2026-08-19), in the
 ;; file next to it. It survived because `gltf_test.cljc` was `.cljc` and
-;; `run-tests.cljs` named four namespaces out of thirty-nine, so the
+;; `run-tests.cljk` named four namespaces out of thirty-nine, so the
 ;; ClojureScript path was never run here. Measured 2026-08-24.
 (def ^:private code-A 65)
 (def ^:private code-Z 90)
