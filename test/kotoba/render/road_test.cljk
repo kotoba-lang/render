@@ -1,5 +1,5 @@
 (ns kotoba.render.road-test
-  (:require [clojure.set :as set]
+  (:require [kotoba.lang.coll :as set]
             [kotoba.test :refer [deftest is]]
             [kotoba.render.road :as road]))
 
