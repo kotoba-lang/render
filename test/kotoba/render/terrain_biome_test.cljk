@@ -1,5 +1,5 @@
 (ns kotoba.render.terrain-biome-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.terrain :as terrain]
             [kotoba.render.terrain-biome :as biome]))
 

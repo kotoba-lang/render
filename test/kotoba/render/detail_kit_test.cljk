@@ -1,5 +1,5 @@
 (ns kotoba.render.detail-kit-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.detail-kit :as kit]))
 
 (def base {:family :stylized :entity-id :station-a :seed 4242

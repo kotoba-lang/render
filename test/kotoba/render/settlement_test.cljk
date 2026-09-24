@@ -1,5 +1,5 @@
 (ns kotoba.render.settlement-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.settlement :as settlement]))
 
 (def base {:family :stylized :entity-id :settlement-a :seed 90210

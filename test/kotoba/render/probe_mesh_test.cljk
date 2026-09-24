@@ -24,7 +24,7 @@
    `kami-nv-compat` is in the `:test` alias, not `:paths` — see the comment in
    deps.edn. `render` does not ship a dependency on an engine repo to get this
    coverage."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.lang.kami-nv-compat.kami-rt.bvh :as bvh]
             [kotoba.render.probe-bake :as bake]
             [kotoba.render.sh :as sh]))

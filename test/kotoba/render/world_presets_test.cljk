@@ -1,5 +1,5 @@
 (ns kotoba.render.world-presets-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.world-presets :as presets]))
 
 (deftest covers-every-requested-environment-role

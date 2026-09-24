@@ -1,7 +1,7 @@
 (ns kotoba.render.splat-raster-test
   "Enough to trust a picture as evidence: things land where they should, the
    nearer of two wins, and nothing is drawn from behind the camera."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.splat :as splat]
             [kotoba.render.splat-raster :as raster]))
 

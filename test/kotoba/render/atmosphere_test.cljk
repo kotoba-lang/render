@@ -1,5 +1,5 @@
 (ns kotoba.render.atmosphere-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.atmosphere :as atmosphere]))
 
 (deftest normalized-contract

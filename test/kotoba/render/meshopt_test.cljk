@@ -3,7 +3,7 @@
    mod tests` — the byte vectors are the exact fixtures the Rust source
    says were 'produced by the real meshoptimizer C++ encoder
    (zeux/meshoptimizer, encode version 1)', proving this port is bit-exact."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.meshopt :as mo]))
 
 (deftest vertex-buffer-matches-reference-encoder

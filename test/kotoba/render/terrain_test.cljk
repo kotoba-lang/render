@@ -1,5 +1,5 @@
 (ns kotoba.render.terrain-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.lod :as lod]
             [kotoba.render.mesh :as mesh]
             [kotoba.render.terrain :as terrain]

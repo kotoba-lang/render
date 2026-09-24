@@ -2,7 +2,7 @@
   "kami-render/src/camera.rs carried no #[cfg(test)] block, so these are new
    sanity/parity tests written against the documented Rust semantics (glam's
    look_at_rh / perspective_rh / orthographic_rh, wgpu depth-range [0,1])."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.camera :as cam]))
 
 (defn- close? [a b eps] (< (Math/abs (double (- a b))) eps))

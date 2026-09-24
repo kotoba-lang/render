@@ -1,5 +1,5 @@
 (ns kotoba.render.procedural-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.procedural :as procedural]
             [kotoba.render.texture :as texture]))
 

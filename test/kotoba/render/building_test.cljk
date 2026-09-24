@@ -1,5 +1,5 @@
 (ns kotoba.render.building-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.building :as building]
             [kotoba.render.lod :as lod]
             [kotoba.render.mesh :as mesh]))

@@ -1,5 +1,5 @@
 (ns kotoba.render.environment-bake-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.environment-bake :as bake]
             [kotoba.render.texture :as texture]))
 

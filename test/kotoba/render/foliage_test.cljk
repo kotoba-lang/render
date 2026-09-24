@@ -1,5 +1,5 @@
 (ns kotoba.render.foliage-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.foliage :as foliage]
             [kotoba.render.procedural :as procedural]))
 

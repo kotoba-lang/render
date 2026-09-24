@@ -3,7 +3,7 @@
    `#[cfg(test)] mod tests` — including the bit-exact SPZ/PLY fixtures.
    JVM-only (`.clj`, not `.cljc`) — the fixture builders use
    `java.util.zip.GZIPOutputStream`/`java.nio.ByteBuffer`."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.bits :as bits]
             [kotoba.render.splat :as splat]
             [kotoba.render.splat-loader :as sl]))

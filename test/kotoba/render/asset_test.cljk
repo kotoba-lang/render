@@ -1,6 +1,6 @@
 (ns kotoba.render.asset-test
   "Ported from kami-render/src/asset.rs's #[cfg(test)] mod tests."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.asset :as asset]))
 
 (deftest cache-insert-and-get

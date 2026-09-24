@@ -1,4 +1,4 @@
-(ns kotoba.render.quality-test (:require [clojure.test :refer [deftest is]] [kotoba.render.lod :as lod] [kotoba.render.material :as material] [kotoba.render.post-process :as post] [kotoba.render.quality :as quality] [kotoba.render.shadow :as shadow]))
+(ns kotoba.render.quality-test (:require [kotoba.test :refer [deftest is]] [kotoba.render.lod :as lod] [kotoba.render.material :as material] [kotoba.render.post-process :as post] [kotoba.render.quality :as quality] [kotoba.render.shadow :as shadow]))
 (deftest pbr-material-contract
   (is (material/valid? {}))
   (is (= [:invalid-metallic] (material/errors {:metallic 1.2})))

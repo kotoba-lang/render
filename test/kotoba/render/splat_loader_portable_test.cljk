@@ -10,7 +10,7 @@
 
   So the fixture here writes those normals -- it is not decoration. Without
   them this file would pass on both runtimes with the bug in place."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.splat-loader :as sl]))
 
 (defn- f32-le

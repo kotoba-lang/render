@@ -1,5 +1,5 @@
 (ns kotoba.render.streaming-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.streaming :as streaming]))
 
 (def policy {:cell-size 10.0 :classes {:prop {:enter 10.0 :exit 12.0 :lod-hysteresis 1.0}}})

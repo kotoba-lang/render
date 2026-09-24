@@ -7,7 +7,7 @@
    layout from the Rust source's
    `khr_mesh_quantization_dequantizes_positions_and_normals` test, applied
    to the standalone [[kotoba.render.gltf/dequantize-attr]] function."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.gltf :as gltf]))
 
 (deftest base64-decode-roundtrip

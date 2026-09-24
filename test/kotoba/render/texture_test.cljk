@@ -2,7 +2,7 @@
   "Ported from kami-render/src/texture.rs's #[cfg(test)] mod tests
    (mip_level_calculation) plus new coverage for the CPU box-filter
    downsampler."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.texture :as tex]))
 
 (deftest portable-pbr-texture-contract

@@ -1,6 +1,6 @@
 (ns kotoba.render.road-test
   (:require [clojure.set :as set]
-            [clojure.test :refer [deftest is]]
+            [kotoba.test :refer [deftest is]]
             [kotoba.render.road :as road]))
 
 (def terrain {:patch [0 0] :size 64.0 :base-segments 32

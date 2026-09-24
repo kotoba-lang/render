@@ -1,5 +1,5 @@
 (ns kotoba.render.material-readability-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.material :as material]
             [kotoba.render.material-readability :as readability]))
 

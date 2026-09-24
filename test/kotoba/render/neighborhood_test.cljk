@@ -1,5 +1,5 @@
 (ns kotoba.render.neighborhood-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.neighborhood :as neighborhood]))
 
 (def base {:family :stylized :entity-id :junction-a :seed 31415

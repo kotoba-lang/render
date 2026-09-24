@@ -1,5 +1,5 @@
 (ns kotoba.render.close-character-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.close-character :as close]
             [kotoba.render.material :as material]))
 

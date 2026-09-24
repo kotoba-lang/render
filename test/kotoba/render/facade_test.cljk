@@ -1,5 +1,5 @@
 (ns kotoba.render.facade-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.facade :as facade]))
 
 (def base {:family :stylized :entity-id :block-a :seed 771
