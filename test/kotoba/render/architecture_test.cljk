@@ -1,5 +1,5 @@
 (ns kotoba.render.architecture-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.architecture :as architecture]))
 
 (deftest detail-budgets-are-bounded-and-monotonic

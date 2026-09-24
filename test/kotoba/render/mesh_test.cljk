@@ -1,6 +1,6 @@
 (ns kotoba.render.mesh-test
   "Parity tests ported from `kami-render/src/mesh.rs`'s `#[cfg(test)] mod tests`."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.mesh :as mesh]))
 
 (deftest cube-counts

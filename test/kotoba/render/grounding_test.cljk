@@ -1,5 +1,5 @@
 (ns kotoba.render.grounding-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.grounding :as grounding]))
 
 (def base {:family :stylized :entity-id :operator-1

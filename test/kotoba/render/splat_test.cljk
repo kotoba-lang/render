@@ -1,7 +1,7 @@
 (ns kotoba.render.splat-test
   "Ported from kami-render/src/splat.rs's #[cfg(test)] mod tests (data-size
    assertions dropped — no #[repr(C)] byte layout in CLJC data)."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.splat :as splat]))
 
 (defn- gs [pos]

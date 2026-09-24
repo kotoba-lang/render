@@ -1,5 +1,5 @@
 (ns kotoba.render.vegetation-cluster-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.vegetation-cluster :as cluster]))
 
 (def base {:family :stylized :entity-id :grove-a :seed 4815 :radius 9.0})

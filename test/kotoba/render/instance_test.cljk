@@ -1,5 +1,5 @@
 (ns kotoba.render.instance-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.instance :as instance]))
 
 (deftest uv-transform-contract

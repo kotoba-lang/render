@@ -6,7 +6,7 @@
    like the field outside it. If that test can pass without occlusion working,
    nothing here is worth keeping — so it is written as a *contrast* between two
    positions in one grid, not as an absolute value."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.probe :as probe]
             [kotoba.render.probe-bake :as bake]
             [kotoba.render.sh :as sh]))

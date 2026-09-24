@@ -7,7 +7,7 @@
    block vectors are the exact reference-encoder outputs embedded in the Rust
    source (`uastc_vectors.rs`), so passing them is a genuine bit-exact-port
    proof for every mode they cover (0/4/6/8/9/11/15), not just 'code runs'."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kotoba.render.uastc :as uastc]
             [kotoba.render.basisu :as basisu]))
 

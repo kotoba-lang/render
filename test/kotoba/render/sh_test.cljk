@@ -2,7 +2,7 @@
   "Gates for the SH projection, pinned against closed forms rather than against
    recorded output of this code. A fixture captured from my own implementation
    would agree with it however wrong it was."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.render.sampling :as sampling]
             [kotoba.render.sh :as sh]))
 
