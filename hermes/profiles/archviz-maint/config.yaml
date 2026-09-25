@@ -127,7 +127,7 @@ plugins:
   enabled: []
 gateway:
   multiplex_profiles: true
-_config_version: 45
+_config_version: 46
 image_gen:
   provider: nous
 agent:
