@@ -105,5 +105,5 @@
                          [(assoc (first specs) :height 0) :high]
                          [(assoc (first specs) :seed -1) :high]
                          [(first specs) :medium]]]
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (vegetation/vegetation-mesh spec detail)))))

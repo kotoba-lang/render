@@ -61,5 +61,5 @@
                          [(assoc tower :width 0) :high]
                          [(assoc tower :seed -1) :high]
                          [tower :ultra]]]
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (building/building-mesh spec detail)))))

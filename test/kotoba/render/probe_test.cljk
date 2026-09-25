@@ -6,7 +6,7 @@
    like the field outside it. If that test can pass without occlusion working,
    nothing here is worth keeping — so it is written as a *contrast* between two
    positions in one grid, not as an absolute value."
-  (:require [kotoba.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is testing]]
             [kotoba.render.probe :as probe]
             [kotoba.render.probe-bake :as bake]
             [kotoba.render.sh :as sh]))
@@ -47,7 +47,7 @@
     (testing label
       (is (= reason
              (try (probe/probe-grid bad) nil
-                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))))))
+                  (catch kerror/ExceptionInfo e (:reason (ex-data e)))))))))
 
 (deftest sampling-a-grid-vertex-returns-that-probe
   (let [g (flat-grid)

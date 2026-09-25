@@ -9,5 +9,5 @@
   (doseq [bad [[1 2 3] [0 1 0 0] [-1 1 0 0]
                [1 1 ##Inf 0] [1 1 ##NaN 0]]]
     (testing (str bad)
-      (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+      (is (thrown? js/Error
                    (instance/normalize-uv-transform bad))))))

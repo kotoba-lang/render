@@ -3,7 +3,7 @@
    `#[cfg(test)] mod tests` — including the bit-exact SPZ/PLY fixtures.
    JVM-only (`.clj`, not `.cljc`) — the fixture builders use
    `java.util.zip.GZIPOutputStream`/`java.nio.ByteBuffer`."
-  (:require [kotoba.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is]]
             [kotoba.render.bits :as bits]
             [kotoba.render.splat :as splat]
             [kotoba.render.splat-loader :as sl]))
@@ -162,6 +162,6 @@
 
 (deftest load-spz-rejects-non-spz
   (let [bad (gzip (vec (map int "this is not an spz file at all, just text padding............")))]
-    (is (thrown? clojure.lang.ExceptionInfo (sl/load-spz bad)))
-    (try (sl/load-spz bad) (catch clojure.lang.ExceptionInfo e
+    (is (thrown? kerror/ExceptionInfo (sl/load-spz bad)))
+    (try (sl/load-spz bad) (catch kerror/ExceptionInfo e
                               (is (= (:type (ex-data e)) :bad-magic))))))

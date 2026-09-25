@@ -6,7 +6,7 @@
    fixed Hammersley sequence, then stores it as gzip EDN.  Runtime hosts only
    load/upload the result; no convolution happens during a frame."
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+            [kotoba.io :as io]
             [kotoba.render.cubemap :as cubemap]
             [kotoba.render.environment :as environment]
             [kotoba.render.sampling :as sampling]
