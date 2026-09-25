@@ -106,5 +106,5 @@
                    {:kind :steel :width 4 :height 4 :seed 1 :scale 0}
                    {:kind :steel :width 4 :height 4 :seed 1.5}
                    {:kind :steel :width 4 :height 4 :seed 4294967296}]]
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (procedural/bake-pbr-material options)))))

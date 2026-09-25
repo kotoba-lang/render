@@ -15,7 +15,7 @@
    be `d/transact`-ed directly; `pipeline-specs` reconstitutes the original
    bare-keyed maps below for this ns's own callers."
   (:require [kotoba.lang.edn :as edn]
-            [clojure.java.io :as io]))
+            [kotoba.io :as io]))
 
 (def resource-path "kotoba/render/pipeline_specs.edn")
 

@@ -37,7 +37,7 @@
     (is (every? #(= 0.91 (get-in % [:decal :pbr :roughness])) (vals registry)))))
 
 (deftest invalid-material-and-zero-bias-fail-loudly
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (decal/decal-mesh (assoc spec :depth-bias 0.0))))
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (decal/decal-mesh (assoc-in spec [:material :alpha-mode] :unknown)))))

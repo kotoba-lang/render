@@ -50,9 +50,9 @@
     (is (true? (get-in veg [:outline-policy :participates?])))))
 
 (deftest invalid-boundaries-fail-loudly
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (presets/resolve-preset {:family :cinematic :domain :vegetation :role :grass})))
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (presets/resolve-preset {:family :stylized :domain :architecture :role :foliage}))))
 
 (deftest scene-palette-and-resolution-evidence-are-stable

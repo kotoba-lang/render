@@ -108,7 +108,7 @@
     (is (neg? (first (get-in left [:sockets :weapon-hand]))))))
 
 (deftest invalid-character-contract-is-rejected
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (character/character-mesh (assoc spec :height 0) :high)))
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (character/character-mesh spec :medium))))

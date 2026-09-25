@@ -8,7 +8,7 @@
          (foliage/gpu-instance {:alpha-cutoff 0.43 :wind-strength 0.28
                                 :wind-phase 1.25 :wind-frequency 1.7})))
   (is (= -1.0 (first (foliage/gpu-instance {:alpha-mode :opaque}))))
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (foliage/normalize {:alpha-cutoff 1.1}))))
 
 (deftest deterministic-wind-reference-pins-base-and-moves-tip

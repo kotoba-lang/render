@@ -334,5 +334,5 @@
               (put 44 (u32-bytes 1)))] ; BasisLZ -> ETC1S
     (is (= :etc1s-unsupported
            (try (basisu/decode-ktx2 k) nil
-                (catch #?(:clj clojure.lang.ExceptionInfo :cljs :default) e
+                (catch :default e
                   (:type (ex-data e))))))))

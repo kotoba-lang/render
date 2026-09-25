@@ -71,7 +71,7 @@
                          [(assoc base :amplitude -1) :high]
                          [(assoc base :seed -1) :high]
                          [base :ultra]]]
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (terrain/terrain-mesh spec detail)))))
 
 (deftest registered-meshes-carry-default-biomes-through-every-lod-and-skirt

@@ -26,7 +26,7 @@
     (is (= [:grass :soil :rock] (mapv :id (:layers contract))))
     (is (every? #(every? (set (keys %)) [:texture-layer :roughness :metallic
                                          :normal-strength :uv-scale]) (:layers contract)))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (biome/webgpu-contract (assoc biome/default-biome :layers []))))))
 
 (deftest terrain-mesh-carries-normalized-gpu-weight-attribute
@@ -42,5 +42,5 @@
                       (mapv #(assoc %1 :texture-layer %2)
                             (:layers biome/default-biome) [4 0 7]))]
     (is (= [4 0 7] (biome/layer-indices custom))))
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (biome/layer-indices (assoc-in biome/default-biome [:layers 0 :texture-layer] -1)))))
